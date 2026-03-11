@@ -2,7 +2,10 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <!-- ===== PWA 설정 ===== -->
+    <!-- ===== Firebase SDK ===== -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <!-- ===== PWA ===== -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#00529b">
     <meta name="mobile-web-app-capable" content="yes">
@@ -10,10 +13,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="GS25노무">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <!-- ===== PWA 설정 끝 ===== -->
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.0)</title>
+    <title>GS25 평택점 노무 시스템 V13 (Firebase 연동)</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
         .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #00529b; margin-bottom: 20px; }
@@ -114,11 +116,20 @@
         .override-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed #eee; padding-bottom: 8px; }
         .override-row label { font-size: 14px; font-weight: bold; color: #555; width: 120px; }
         .override-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+    
+        /* 동기화 상태 표시 */
+        .sync-status { position: fixed; bottom: 20px; right: 20px; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; z-index: 9999; transition: all 0.4s; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+        .sync-ok   { background: #28a745; color: white; }
+        .sync-ing  { background: #ffc107; color: #333; }
+        .sync-err  { background: #d32f2f; color: white; }
+        .sync-off  { background: #6c757d; color: white; }
     </style>
 </head>
 <body>
+    <div id="syncStatus" class="sync-status sync-off">⏳ 연결 중...</div>
+
     <div class="container">
-        <h2>GS25 평택점 종합 노무 시스템 (V8.0)</h2>
+        <h2>GS25 평택점 종합 노무 시스템 V13 (Firebase 실시간 연동)</h2>
         
         <div id="todayDateDisplay" class="today-display"></div>
         <div id="settlementAlert" class="alert-box">
@@ -349,35 +360,106 @@
             }
         }
 
+
+        // ===== Firebase 설정 =====
+        const firebaseConfig = {
+            apiKey: "AIzaSyAkG-AxbwFt9MUlP9E3alAbIjN9-HHkWE8",
+            authDomain: "gs25-payroll.firebaseapp.com",
+            databaseURL: "https://gs25-payroll-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "gs25-payroll",
+            storageBucket: "gs25-payroll.firebasestorage.app",
+            messagingSenderId: "244037450297",
+            appId: "1:244037450297:web:c1fa4b79aa38849985ebe8"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const firebaseDB = firebase.database();
+        const DB_REF = firebaseDB.ref('gs25_data');
+
+        // 동기화 상태 표시 헬퍼
+        function setSyncStatus(type, msg) {
+            const el = document.getElementById('syncStatus');
+            el.className = 'sync-status ' + type;
+            el.innerText = msg;
+        }
+
+        // 저장 딜레이 타이머 (과도한 쓰기 방지)
+        let saveTimer = null;
+        function saveDB() {
+            // 로컬 백업도 동시 유지
+            localStorage.setItem('gs25_db_v8', JSON.stringify(db));
+            // Firebase 저장 (0.8초 디바운스)
+            if (saveTimer) clearTimeout(saveTimer);
+            setSyncStatus('sync-ing', '💾 저장 중...');
+            saveTimer = setTimeout(() => {
+                DB_REF.set(db)
+                    .then(() => setSyncStatus('sync-ok', '✅ 동기화 완료'))
+                    .catch(e => {
+                        setSyncStatus('sync-err', '⚠️ 오프라인 (로컬저장됨)');
+                        console.warn('Firebase 저장 실패, 로컬 저장:', e);
+                    });
+            }, 800);
+        }
+
         function initDB() {
             renderTodayInfo();
-            const saved = localStorage.getItem('gs25_db_v8'); // V8 로컬 스토리지 키 변경 (데이터 포맷 업그레이드 방지 목적)
-            if (saved) {
-                let parsed = JSON.parse(saved);
-                db.workers = parsed.workers || []; db.schedule = parsed.schedule || {};
-                db.overrides = parsed.overrides || {}; db.settlements = parsed.settlements || [];
+
+            // 오프라인 대비 로컬 우선 로드
+            const localSaved = localStorage.getItem('gs25_db_v8');
+            if (localSaved) {
+                let parsed = JSON.parse(localSaved);
+                db.workers = parsed.workers || [];
+                db.schedule = parsed.schedule || {};
+                db.overrides = parsed.overrides || {};
+                db.settlements = parsed.settlements || [];
                 db.settings = parsed.settings || {};
             }
-            
+
             const day = currentWeekStart.getDay();
             const diff = currentWeekStart.getDate() - day + (day === 0 ? -6 : 1);
             currentWeekStart.setDate(diff);
-            
+
             const today = new Date();
             const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
             const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            
-            // 저장된 설정이 있으면 불러오고 없으면 기본값 세팅
+
             document.getElementById('calcStart').value = db.settings.calcStart || formatDate(firstDay);
             document.getElementById('calcEnd').value = db.settings.calcEnd || formatDate(lastDay);
-            if(db.settings.isOver5) document.getElementById('isOver5').value = db.settings.isOver5;
+            if (db.settings.isOver5) document.getElementById('isOver5').value = db.settings.isOver5;
 
             checkAlert();
             updateWorkerList();
             renderWeek();
+
+            // Firebase 실시간 리스너 — 다른 기기에서 변경 시 자동 반영
+            setSyncStatus('sync-ing', '🔄 서버 연결 중...');
+            DB_REF.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    db.workers     = data.workers     || [];
+                    db.schedule    = data.schedule    || {};
+                    db.overrides   = data.overrides   || {};
+                    db.settlements = data.settlements || [];
+                    db.settings    = data.settings    || {};
+
+                    // 로컬에도 동기화
+                    localStorage.setItem('gs25_db_v8', JSON.stringify(db));
+
+                    document.getElementById('calcStart').value = db.settings.calcStart || formatDate(firstDay);
+                    document.getElementById('calcEnd').value = db.settings.calcEnd || formatDate(lastDay);
+                    if (db.settings.isOver5) document.getElementById('isOver5').value = db.settings.isOver5;
+
+                    updateWorkerList();
+                    renderGridData();
+                    setSyncStatus('sync-ok', '✅ 실시간 연동 중');
+                } else {
+                    setSyncStatus('sync-ok', '✅ 연결됨 (새 데이터)');
+                }
+            }, (error) => {
+                setSyncStatus('sync-err', '⚠️ 연결 실패 (로컬모드)');
+                console.error('Firebase 연결 오류:', error);
+            });
         }
 
-        function saveDB() { localStorage.setItem('gs25_db_v8', JSON.stringify(db)); }
 
         function formatDate(date) {
             const y = date.getFullYear();
@@ -761,13 +843,14 @@
     </script>
 
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('SW 등록 완료:', reg.scope))
-            .catch(err => console.log('SW 등록 실패:', err));
-        });
-      }
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(r => console.log('SW 등록:', r.scope))
+                    .catch(e => console.log('SW 실패:', e));
+            });
+        }
     </script>
+
 </body>
 </html>
