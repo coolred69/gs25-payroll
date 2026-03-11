@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <!-- ===== PWA 설정 ===== -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00529b">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GS25노무">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <!-- ===== PWA 설정 끝 ===== -->
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.0)</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
+        .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #00529b; margin-bottom: 20px; }
+        h2 { text-align: center; font-size: 22px; margin-bottom: 10px; color: #00529b; }
+        
+        /* 신규: 상단 날짜 표시 영역 */
+        .today-display { text-align: center; font-size: 15px; font-weight: bold; margin-bottom: 20px; color: #495057; background: #e9ecef; padding: 10px; border-radius: 4px; border: 1px solid #ced4da; }
+        .alert-box { display: none; background: #ffebee; color: #c62828; padding: 15px; margin-bottom: 20px; border-radius: 4px; font-weight: bold; text-align: center; border: 2px solid #ef9a9a; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        .top-nav { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; flex-wrap: wrap; }
+        .nav-btn { flex: 1; min-width: 150px; padding: 12px; font-size: 15px; font-weight: bold; background: #e9ecef; color: #555; border: none; border-radius: 8px 8px 0 0; cursor: pointer; transition: all 0.3s; }
+        .nav-btn.active { background: #00529b; color: white; box-shadow: 0 -3px 5px rgba(0,0,0,0.1); }
+        .nav-btn:hover:not(.active) { background: #dde2e6; }
+        
+        .page-view { display: none; animation: fadeIn 0.3s; }
+        .page-view.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .layout-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; }
+        @media (max-width: 1000px) { .layout-grid { grid-template-columns: 1fr; } }
+        
+        .panel { background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #dee2e6; margin-bottom: 15px; }
+        .panel h3 { margin-top: 0; font-size: 16px; color: #333; border-bottom: 2px solid #00529b; padding-bottom: 5px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        
+        .input-group { margin-bottom: 10px; }
+        .input-group label { display: block; font-size: 12px; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .input-group input, .input-group select { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; box-sizing: border-box; font-size: 13px; font-weight: bold; }
+        
+        button.primary-btn { width: 100%; padding: 10px; background: #00529b; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 5px; font-size: 14px; transition: background 0.3s; }
+        button.primary-btn:hover { background: #003d73; }
+        button.primary-btn.edit-mode { background: #28a745; }
+        button.calc-btn { background: #d32f2f; margin-top: 15px; font-size: 16px; padding: 12px; }
+        button.calc-btn:hover { background: #b71c1c; }
+        
+        /* 결과 패널 버튼 그룹 */
+        .result-btn-group { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
+        .result-btn-group button { flex: 1; padding: 12px; font-size: 14px; font-weight: bold; border-radius: 4px; cursor: pointer; border: none; min-width: 200px; }
+        .save-history-btn { background: #28a745; color: white; }
+        .save-history-btn:hover { background: #218838; }
+        .kakao-btn { background: #fee500; color: #371d1e; }
+        .kakao-btn:hover { background: #e5cd00; }
+        
+        .action-group { display: flex; gap: 10px; margin-bottom: 10px; }
+        button.copy-btn { flex: 1; background: #28a745; color: white; border: none; font-size: 13px; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button.clear-btn { flex: 1; background: #6c757d; color: white; border: none; font-size: 13px; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        
+        .worker-list { max-height: 250px; overflow-y: auto; margin-top: 5px; }
+        .worker-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin-bottom: 5px; background: #fff; border: 2px solid transparent; border-radius: 4px; cursor: pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .worker-item.active { border-color: #d32f2f; background: #fff3f3; transform: scale(1.02); font-weight: bold; }
+        .worker-color { width: 14px; height: 14px; border-radius: 50%; display: inline-block; margin-right: 8px; vertical-align: middle; }
+        
+        .btn-group-sm { display: flex; gap: 4px; }
+        button.edit-btn { background: #ffc107; color: #333; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        button.del-btn { background: #777; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        
+        .eraser-item { background: #fff3cd; border: 1px solid #ffeeba; text-align: center; justify-content: center; color: #856404; font-weight: bold; margin-bottom: 10px; }
+        .eraser-item.active { border-color: #d32f2f; background: #ffdf7e; }
+        
+        .tip-box { font-size: 11px; color: #d32f2f; margin-bottom: 15px; background: #ffebee; padding: 8px; border-radius: 4px; border: 1px dashed #ef9a9a; }
+
+        .week-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: #e9ecef; padding: 10px; border-radius: 4px; font-weight: bold; }
+        .week-nav button { background: #fff; border: 1px solid #ccc; padding: 5px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        
+        .chart-container { overflow-x: auto; cursor: crosshair; }
+        .timetable { width: 100%; min-width: 600px; border-collapse: collapse; font-size: 12px; text-align: center; }
+        .timetable th, .timetable td { border: 1px solid #ccc; padding: 0; height: 32px; width: 12.5%; }
+        .timetable th { background: #f1f3f5; position: sticky; top: 0; z-index: 10; font-size: 10px; line-height: 1.3; }
+        .time-cell { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; color: white; box-sizing: border-box; }
+        .time-cell:hover { opacity: 0.8; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.2); }
+        .conflict { background: #d32f2f !important; border: 2px solid #b71c1c; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.7; } }
+
+        .result-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        .result-table th, .result-table td { border: 1px solid #dee2e6; padding: 10px; text-align: center; vertical-align: middle; }
+        .result-table th { background: #f8f9fa; color: #00529b; font-size: 12px; }
+        .total-amount { font-size: 22px; font-weight: bold; color: #d32f2f; text-align: right; margin-top: 10px; }
+
+        .dashboard-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 800px; }
+        .dashboard-table th, .dashboard-table td { border: 1px solid #ccc; padding: 12px; text-align: center; vertical-align: middle; }
+        .dashboard-table th { background: #e3f2fd; color: #00529b; font-size: 15px; }
+        .dashboard-table tr:hover { background-color: #f1f8ff; }
+        .manual-tag { background: #ffc107; color: #000; font-size: 10px; padding: 2px 5px; border-radius: 4px; font-weight: bold; margin-left: 6px; display: inline-block; }
+        
+        .history-list { display: flex; flex-direction: column; gap: 8px; max-height: 600px; overflow-y: auto; }
+        .history-card { background: #fff; border: 1px solid #dee2e6; padding: 15px; border-radius: 6px; cursor: pointer; transition: all 0.2s; border-left: 4px solid #00529b; display: flex; justify-content: space-between; align-items: center; }
+        .history-card:hover { background: #f1f8ff; border-color: #00529b; }
+        .history-card.active { background: #e3f2fd; border-color: #00529b; }
+        .history-info h4 { margin: 0 0 5px 0; color: #333; font-size: 15px; }
+        .history-info p { margin: 0; font-size: 12px; color: #777; }
+        
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-content { background: #fff; padding: 25px; border-radius: 8px; width: 90%; max-width: 450px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .modal-content h3 { margin-top: 0; color: #00529b; border-bottom: 2px solid #00529b; padding-bottom: 10px; font-size: 18px; }
+        .modal-btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-btn-group button { flex: 1; padding: 12px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .btn-save { background: #00529b; color: white; }
+        .btn-cancel { background: #6c757d; color: white; }
+        .override-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed #eee; padding-bottom: 8px; }
+        .override-row label { font-size: 14px; font-weight: bold; color: #555; width: 120px; }
+        .override-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>GS25 평택점 종합 노무 시스템 (V8.0)</h2>
+        
+        <div id="todayDateDisplay" class="today-display"></div>
+        <div id="settlementAlert" class="alert-box">
+            ⚠️ 정산 기준일이 도래했거나 지났습니다.<br>스케줄표를 최종 확인 후, 하단의 [급여 산출]을 눌러 내역을 백업 및 공유하십시오.
+        </div>
+
+        <div class="top-nav">
+            <button id="navMain" class="nav-btn active" onclick="switchPage('main')">🕒 스케줄 및 급여 정산</button>
+            <button id="navDash" class="nav-btn" onclick="switchPage('dashboard')">👨‍💼 직원 종합 관리(CRM)</button>
+            <button id="navHistory" class="nav-btn" onclick="switchPage('history')">💾 과거 정산 보관함</button>
+        </div>
+        
+        <div id="pageMain" class="page-view active">
+            <div class="layout-grid">
+                <div>
+                    <div class="panel">
+                        <h3>1. 근무자 정보 관리</h3>
+                        <div class="input-group">
+                            <label>근무자 이름 (또는 이름_역할)</label>
+                            <input type="text" id="wName" placeholder="예: 김알바 또는 김알바_야간">
+                        </div>
+                        <div class="input-group">
+                            <label>적용 시급 (원)</label>
+                            <input type="number" id="wWage" value="10320" step="10" min="10320">
+                        </div>
+                        <div class="input-group">
+                            <label>세금/보험 공제 설정</label>
+                            <select id="wTax">
+                                <option value="0.033" selected>3.3% 프리랜서 (기본)</option>
+                                <option value="0.094">9.4% 4대보험 가입자</option>
+                                <option value="0">공제 없음</option>
+                            </select>
+                        </div>
+                        <button id="mainBtn" class="primary-btn" onclick="addOrUpdateWorker()">+ 근무자 추가 / 정보 갱신</button>
+                        
+                        <div style="margin-top: 15px; font-size: 12px; color: #555; font-weight: bold;">👇 칠할 대상을 선택하세요</div>
+                        <div id="eraserBtn" class="worker-item eraser-item" onclick="selectEraser()">
+                            <div>🧹 <strong>지우개</strong> (드래그하여 색 지우기)</div>
+                        </div>
+                        <div id="workerList" class="worker-list"></div>
+                    </div>
+
+                    <div class="panel">
+                        <h3>2. 월간 급여 정산</h3>
+                        <div class="input-group">
+                            <label>점포 상시근로자 기준</label>
+                            <select id="isOver5" onchange="saveSettings()">
+                                <option value="false">5인 미만 (연장/야간 제외)</option>
+                                <option value="true">5인 이상 (가산수당 적용)</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>정산 시작일</label>
+                            <input type="date" id="calcStart" onchange="saveSettings()">
+                        </div>
+                        <div class="input-group">
+                            <label>정산 종료일</label>
+                            <input type="date" id="calcEnd" onchange="saveSettings()">
+                        </div>
+                        <button class="primary-btn calc-btn" onclick="calculatePayroll()">💰 기간 총 급여 산출 (세후)</button>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="panel" style="background: #fff;">
+                        <h3>3. 스케줄 타임테이블 입력</h3>
+                        <div class="week-nav">
+                            <button onclick="changeWeek(-1)">◀ 이전 주</button>
+                            <span id="weekLabel">2026-00-00 ~ 2026-00-00</span>
+                            <button onclick="changeWeek(1)">다음 주 ▶</button>
+                        </div>
+                        
+                        <div class="action-group">
+                            <button class="copy-btn" onclick="copyPreviousWeek()">🔄 지난주 복사</button>
+                            <button class="clear-btn" onclick="clearCurrentWeek()">🗑️ 이번 주 비우기</button>
+                        </div>
+
+                        <div class="chart-container">
+                            <table class="timetable" id="timetable">
+                                <thead>
+                                    <tr id="timetableHeader"></tr>
+                                </thead>
+                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="panel" style="background: #fff; display: none;" id="resultPanel">
+                        <h3>📊 정산 결과 브리핑 (<span id="resultPeriod"></span>)</h3>
+                        <div style="overflow-x: auto;">
+                            <table class="result-table">
+                                <thead>
+                                    <tr>
+                                        <th>통합 이름</th>
+                                        <th>총 근로 시간 (시급 분리)</th>
+                                        <th>합산 기본급</th>
+                                        <th>주휴/가산수당</th>
+                                        <th>공제내역 (세금)</th>
+                                        <th>세후 실수령액</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultBody"></tbody>
+                            </table>
+                        </div>
+                        <div class="total-amount" id="totalStoreNet">총 지급액: 0 원</div>
+                        
+                        <div class="result-btn-group">
+                            <button class="save-history-btn" onclick="saveSnapshot()">💾 이 정산 내역 영구 보관 (대장 저장)</button>
+                            <button class="kakao-btn" onclick="copyToKakao()">💬 카카오톡 요약 복사하기</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="pageDash" class="page-view">
+            <div class="panel" style="background: #fff; min-height: 500px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #00529b; padding-bottom:10px; margin-bottom:20px;">
+                    <h3 style="margin:0; border:none; padding:0; font-size:18px;">👨‍💼 전체 직원 누적 노무 데이터 (분석/수정)</h3>
+                    <button onclick="renderDashboard()" style="padding:8px 15px; font-weight:bold; cursor:pointer; background:#e9ecef; border:1px solid #ccc; border-radius:4px;">🔄 데이터 새로고침</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="dashboard-table">
+                        <thead>
+                            <tr>
+                                <th>직원명</th>
+                                <th>공제 유형</th>
+                                <th>최초 근무 시작일</th>
+                                <th>마지막 근무일</th>
+                                <th>총 누적 근로일수/시간</th>
+                                <th>총 누적 급여 (수당포함)</th>
+                                <th>수동 데이터 덮어쓰기</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboardBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="pageHistory" class="page-view">
+            <div class="layout-grid">
+                <div class="panel">
+                    <h3>📚 저장된 정산 대장 목록</h3>
+                    <div id="historyList" class="history-list"></div>
+                </div>
+                <div class="panel" style="background: #fff;">
+                    <h3>🔎 정산 대장 상세 열람</h3>
+                    <div id="historyDetailArea" style="text-align:center; padding: 40px; color:#777;">
+                        좌측에서 보관된 정산 내역을 선택하십시오.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div id="overrideModal" class="modal">
+        <div class="modal-content">
+            <h3>📝 [<span id="modalWorkerName"></span>] 노무 데이터 수동 입력</h3>
+            <p style="font-size:12px; color:#d32f2f; margin-bottom:15px; background:#ffebee; padding:10px; border-radius:4px;">※ 값을 입력하면 <b>자동 계산을 무시하고 강제로 고정</b>됩니다.</p>
+            <input type="hidden" id="modalBaseName">
+            <div class="override-row"><label>최초 근무일</label><input type="date" id="ovStart"></div>
+            <div class="override-row"><label>마지막 근무일</label><input type="date" id="ovEnd"></div>
+            <div class="override-row"><label>총 근무 일수</label><input type="number" id="ovDays" placeholder="예: 45"></div>
+            <div class="override-row"><label>총 근무 시간</label><input type="number" id="ovHours" placeholder="예: 360"></div>
+            <div class="override-row"><label>총 합산 급여(원)</label><input type="number" id="ovPay" placeholder="기본급 합계"></div>
+            <div class="override-row"><label>총 가산수당(원)</label><input type="number" id="ovExtra" placeholder="주휴/연장/야간 합계"></div>
+            <div class="modal-btn-group">
+                <button class="btn-cancel" onclick="closeModal()">취소</button>
+                <button class="btn-save" onclick="saveOverrides()">저장 및 강제 적용</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let db = { workers: [], schedule: {}, overrides: {}, settlements: [], settings: {} };
+        let activeWorkerId = null; let editingWorkerId = null; 
+        let isDragging = false; let dragMode = 'add'; 
+        let currentWeekStart = new Date(); 
+        let currentCalcSnapshot = null; 
+        let currentKakaoText = ""; // 카카오톡 복사용 텍스트 보관 변수
+        const colors = ['#007bff', '#28a745', '#fd7e14', '#6f42c1', '#17a2b8', '#e83e8c', '#343a40', '#20c997'];
+
+        // 오늘 날짜 및 알림 렌더링
+        function renderTodayInfo() {
+            const today = new Date();
+            const days = ['일','월','화','수','목','금','토'];
+            const todayStr = `${today.getFullYear()}년 ${today.getMonth()+1}월 ${today.getDate()}일 (${days[today.getDay()]})`;
+            document.getElementById('todayDateDisplay').innerText = `📅 오늘 날짜 : ${todayStr}`;
+        }
+
+        function checkAlert() {
+            const endStr = document.getElementById('calcEnd').value;
+            if(!endStr) return;
+            const endObj = new Date(endStr);
+            const todayObj = new Date();
+            // 시간 무시 순수 날짜 비교
+            endObj.setHours(0,0,0,0);
+            const compareToday = new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate());
+            
+            if(compareToday >= endObj) {
+                document.getElementById('settlementAlert').style.display = 'block';
+            } else {
+                document.getElementById('settlementAlert').style.display = 'none';
+            }
+        }
+
+        // 설정(날짜) 저장 로직
+        function saveSettings() {
+            db.settings.calcStart = document.getElementById('calcStart').value;
+            db.settings.calcEnd = document.getElementById('calcEnd').value;
+            db.settings.isOver5 = document.getElementById('isOver5').value;
+            saveDB();
+            checkAlert();
+        }
+
+        function switchPage(page) {
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+            if(page === 'main') {
+                document.getElementById('navMain').classList.add('active'); document.getElementById('pageMain').classList.add('active');
+            } else if(page === 'dashboard') {
+                document.getElementById('navDash').classList.add('active'); document.getElementById('pageDash').classList.add('active'); renderDashboard(); 
+            } else if(page === 'history') {
+                document.getElementById('navHistory').classList.add('active'); document.getElementById('pageHistory').classList.add('active'); renderHistoryList();
+            }
+        }
+
+        function initDB() {
+            renderTodayInfo();
+            const saved = localStorage.getItem('gs25_db_v8'); // V8 로컬 스토리지 키 변경 (데이터 포맷 업그레이드 방지 목적)
+            if (saved) {
+                let parsed = JSON.parse(saved);
+                db.workers = parsed.workers || []; db.schedule = parsed.schedule || {};
+                db.overrides = parsed.overrides || {}; db.settlements = parsed.settlements || [];
+                db.settings = parsed.settings || {};
+            }
+            
+            const day = currentWeekStart.getDay();
+            const diff = currentWeekStart.getDate() - day + (day === 0 ? -6 : 1);
+            currentWeekStart.setDate(diff);
+            
+            const today = new Date();
+            const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+            const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            
+            // 저장된 설정이 있으면 불러오고 없으면 기본값 세팅
+            document.getElementById('calcStart').value = db.settings.calcStart || formatDate(firstDay);
+            document.getElementById('calcEnd').value = db.settings.calcEnd || formatDate(lastDay);
+            if(db.settings.isOver5) document.getElementById('isOver5').value = db.settings.isOver5;
+
+            checkAlert();
+            updateWorkerList();
+            renderWeek();
+        }
+
+        function saveDB() { localStorage.setItem('gs25_db_v8', JSON.stringify(db)); }
+
+        function formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function getBaseName(name) { return name.split('_')[0].trim(); }
+
+        function addOrUpdateWorker() {
+            const name = document.getElementById('wName').value.trim();
+            const wage = parseInt(document.getElementById('wWage').value) || 10320;
+            const tax = parseFloat(document.getElementById('wTax').value);
+            
+            if (!name) return alert("근무자 이름을 입력하세요.");
+            if (wage < 10320) { alert("최저시급 미만 설정 불가"); document.getElementById('wWage').value = 10320; return; }
+
+            if (editingWorkerId) {
+                const w = db.workers.find(x => x.id === editingWorkerId);
+                if (w) { w.name = name; w.wage = wage; w.tax = tax; }
+                editingWorkerId = null;
+                document.getElementById('mainBtn').innerText = "+ 근무자 추가 / 정보 갱신";
+                document.getElementById('mainBtn').classList.remove('edit-mode');
+            } else {
+                const id = 'W_' + Date.now();
+                const color = colors[db.workers.length % colors.length];
+                db.workers.push({ id, name, wage, tax, color });
+                selectWorker(id);
+            }
+            document.getElementById('wName').value = ''; document.getElementById('wWage').value = 10320;
+            saveDB(); updateWorkerList(); renderGridData(); 
+        }
+
+        function loadForEdit(id, event) {
+            event.stopPropagation(); 
+            const w = db.workers.find(x => x.id === id);
+            if (!w) return;
+            document.getElementById('wName').value = w.name; document.getElementById('wWage').value = w.wage;
+            if(w.tax !== undefined) document.getElementById('wTax').value = w.tax;
+            editingWorkerId = id;
+            const btn = document.getElementById('mainBtn');
+            btn.innerText = "✓ 정보 갱신 완료"; btn.classList.add('edit-mode');
+        }
+
+        function selectWorker(id) { activeWorkerId = id; document.getElementById('eraserBtn').classList.remove('active'); updateWorkerList(); }
+        function selectEraser() { activeWorkerId = 'ERASER'; document.getElementById('eraserBtn').classList.add('active'); document.querySelectorAll('#workerList .worker-item').forEach(item => { item.classList.remove('active'); }); }
+
+        function deleteWorker(id, event) {
+            event.stopPropagation();
+            if(!confirm("해당 근무자와 입력된 스케줄을 삭제하시겠습니까?")) return;
+            db.workers = db.workers.filter(w => w.id !== id);
+            for (let key in db.schedule) {
+                db.schedule[key] = db.schedule[key].filter(wId => wId !== id);
+                if (db.schedule[key].length === 0) delete db.schedule[key];
+            }
+            if (activeWorkerId === id) activeWorkerId = null;
+            if (editingWorkerId === id) {
+                editingWorkerId = null; document.getElementById('wName').value = ''; document.getElementById('wWage').value = 10320;
+                document.getElementById('mainBtn').innerText = "+ 근무자 추가 / 정보 갱신"; document.getElementById('mainBtn').classList.remove('edit-mode');
+            }
+            saveDB(); updateWorkerList(); renderGridData();
+        }
+
+        function updateWorkerList() {
+            const list = document.getElementById('workerList'); list.innerHTML = '';
+            db.workers.forEach(w => {
+                const item = document.createElement('div');
+                item.className = `worker-item ${w.id === activeWorkerId ? 'active' : ''}`;
+                item.onclick = () => selectWorker(w.id);
+                let taxStr = w.tax == 0.094 ? '4대' : (w.tax == 0.033 ? '3.3%' : '무공제');
+                item.innerHTML = `
+                    <div><span class="worker-color" style="background:${w.color};"></span>${w.name} <span style="font-size:11px; color:#555;">(${w.wage.toLocaleString()}원 / ${taxStr})</span></div>
+                    <div class="btn-group-sm"><button class="edit-btn" onclick="loadForEdit('${w.id}', event)">수정</button><button class="del-btn" onclick="deleteWorker('${w.id}', event)">삭제</button></div>
+                `;
+                list.appendChild(item);
+            });
+            if(activeWorkerId === 'ERASER') document.getElementById('eraserBtn').classList.add('active');
+        }
+
+        function changeWeek(offset) { currentWeekStart.setDate(currentWeekStart.getDate() + (offset * 7)); renderWeek(); }
+
+        function copyPreviousWeek() {
+            if(!confirm("⚠️ '지난주 스케줄'로 덮어씌워집니다. 진행하시겠습니까?")) return;
+            for (let i = 0; i < 7; i++) {
+                let currDay = new Date(currentWeekStart); currDay.setDate(currDay.getDate() + i); let currDateStr = formatDate(currDay);
+                let prevDay = new Date(currDay); prevDay.setDate(prevDay.getDate() - 7); let prevDateStr = formatDate(prevDay);
+                for (let h = 0; h < 24; h++) {
+                    let currKey = `${currDateStr}_${h}`; let prevKey = `${prevDateStr}_${h}`;
+                    if (db.schedule[prevKey] && db.schedule[prevKey].length > 0) { db.schedule[currKey] = [...db.schedule[prevKey]]; } 
+                    else { delete db.schedule[currKey]; }
+                }
+            }
+            saveDB(); renderGridData();
+        }
+
+        function clearCurrentWeek() {
+            if(!confirm("⚠️ 이번 주차 스케줄을 모두 지우시겠습니까?")) return;
+            for (let i = 0; i < 7; i++) {
+                let currDay = new Date(currentWeekStart); currDay.setDate(currDay.getDate() + i); let currDateStr = formatDate(currDay);
+                for (let h = 0; h < 24; h++) { delete db.schedule[`${currDateStr}_${h}`]; }
+            }
+            saveDB(); renderGridData(); 
+        }
+
+        function renderWeek() {
+            const daysMap = ['월', '화', '수', '목', '금', '토', '일'];
+            const header = document.getElementById('timetableHeader'); header.innerHTML = '<th style="width: 55px;">시간</th>';
+            const weekDates = [];
+            for (let i = 0; i < 7; i++) {
+                let d = new Date(currentWeekStart); d.setDate(d.getDate() + i); weekDates.push(formatDate(d));
+                header.innerHTML += `<th>${daysMap[i]}<br><span style="font-size:10px;color:#777;">${d.getDate()}일</span></th>`;
+            }
+            document.getElementById('weekLabel').innerText = `${weekDates[0]} ~ ${weekDates[6]}`;
+            const tbody = document.getElementById('timetableBody'); tbody.innerHTML = '';
+            for (let h = 0; h < 24; h++) {
+                let tr = document.createElement('tr'); let th = document.createElement('th'); 
+                let nextH = h + 1;
+                th.innerHTML = `${h.toString().padStart(2, '0')}시<br>~${nextH.toString().padStart(2, '0')}시`;
+                tr.appendChild(th);
+                for (let i = 0; i < 7; i++) {
+                    let td = document.createElement('td'); let div = document.createElement('div');
+                    div.className = 'time-cell'; div.dataset.key = `${weekDates[i]}_${h}`; 
+                    td.appendChild(div); tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            }
+            renderGridData();
+        }
+
+        function startDrag(e) {
+            if (!activeWorkerId) return alert("좌측에서 칠할 대상을 선택하세요.");
+            if (!e.target.classList.contains('time-cell')) return;
+            isDragging = true; const key = e.target.dataset.key;
+            if (activeWorkerId === 'ERASER') { dragMode = 'erase_all'; delete db.schedule[key]; } 
+            else {
+                if (!db.schedule[key]) db.schedule[key] = [];
+                if (db.schedule[key].includes(activeWorkerId)) { dragMode = 'remove'; db.schedule[key] = db.schedule[key].filter(id => id !== activeWorkerId); } 
+                else { dragMode = 'add'; db.schedule[key].push(activeWorkerId); }
+            }
+            renderGridData();
+        }
+
+        function doDrag(e) {
+            if (!isDragging || !activeWorkerId) return;
+            if (!e.target.classList.contains('time-cell')) return;
+            const key = e.target.dataset.key;
+            if (activeWorkerId === 'ERASER' && dragMode === 'erase_all') { delete db.schedule[key]; } 
+            else {
+                if (!db.schedule[key]) db.schedule[key] = [];
+                if (dragMode === 'add' && !db.schedule[key].includes(activeWorkerId)) { db.schedule[key].push(activeWorkerId); } 
+                else if (dragMode === 'remove' && db.schedule[key].includes(activeWorkerId)) { db.schedule[key] = db.schedule[key].filter(id => id !== activeWorkerId); }
+            }
+            renderGridData();
+        }
+
+        function endDrag() { if (isDragging) { isDragging = false; saveDB(); } }
+
+        function renderGridData() {
+            const cells = document.querySelectorAll('.time-cell');
+            cells.forEach(cell => {
+                const key = cell.dataset.key; const workerIds = db.schedule[key] || [];
+                cell.className = 'time-cell'; cell.style.background = 'transparent'; cell.innerText = '';
+                if (workerIds.length === 1) {
+                    const w = db.workers.find(x => x.id === workerIds[0]);
+                    if(w) { cell.style.background = w.color; cell.innerText = getBaseName(w.name).substring(0, 2); }
+                } else if (workerIds.length > 1) { cell.classList.add('conflict'); cell.innerText = "충돌"; }
+            });
+        }
+
+        function calculatePayroll() {
+            const startStr = document.getElementById('calcStart').value;
+            const endStr = document.getElementById('calcEnd').value;
+            const isOver5 = document.getElementById('isOver5').value === "true";
+            
+            if(!startStr || !endStr || startStr > endStr) return alert("정산 기간을 올바르게 설정하십시오.");
+
+            let results = {}; 
+            let curr = new Date(startStr); const end = new Date(endStr);
+            
+            while(curr <= end) {
+                const dateStr = formatDate(curr);
+                let temp = new Date(curr); const day = temp.getDay(); temp.setDate(temp.getDate() - day + (day === 0 ? -6 : 1)); const weekKey = formatDate(temp); 
+                let dailyHoursMap = {};
+
+                for (let h = 0; h < 24; h++) {
+                    const key = `${dateStr}_${h}`; const workersInHour = db.schedule[key] || [];
+                    workersInHour.forEach(wId => {
+                        const w = db.workers.find(x => x.id === wId); if(!w) return;
+                        const baseName = getBaseName(w.name);
+                        if(!results[baseName]) { results[baseName] = { baseName: baseName, taxRate: (w.tax || 0), totalHours: 0, totalBasePay: 0, nightHours: 0, overtimeHours: 0, juhyuPay: 0, weeks: {}, wageBreakdown: {} }; }
+                        let r = results[baseName];
+                        r.totalHours += 1; r.totalBasePay += w.wage; 
+                        if (!r.wageBreakdown[w.wage]) r.wageBreakdown[w.wage] = 0; r.wageBreakdown[w.wage] += 1;
+                        if (!r.weeks[weekKey]) r.weeks[weekKey] = 0; r.weeks[weekKey] += 1;
+                        if(!dailyHoursMap[baseName]) dailyHoursMap[baseName] = 0; dailyHoursMap[baseName] += 1;
+                        if (h >= 22 || h < 6) r.nightHours += 1;
+                    });
+                }
+                for (let bName in dailyHoursMap) { if (dailyHoursMap[bName] > 8) results[bName].overtimeHours += (dailyHoursMap[bName] - 8); }
+                curr.setDate(curr.getDate() + 1);
+            }
+
+            let storeTotal = 0; let finalOutputList = [];
+            const tbody = document.getElementById('resultBody'); tbody.innerHTML = '';
+            
+            // 카카오톡 텍스트 조립 시작
+            let txt = `[GS25 평택점 급여 정산 내역]\n▪ 정산 기간: ${startStr} ~ ${endStr}\n\n`;
+
+            for (let bName in results) {
+                let r = results[bName]; if (r.totalHours === 0) continue;
+
+                let avgWage = r.totalBasePay / r.totalHours; let extraPay = 0;
+                if (isOver5) { extraPay = (r.nightHours * avgWage * 0.5) + (r.overtimeHours * avgWage * 0.5); }
+                for (let weekKey in r.weeks) {
+                    let hrsInWeek = r.weeks[weekKey];
+                    if (hrsInWeek >= 15) { r.juhyuPay += (Math.min(hrsInWeek, 40) / 40) * 8 * avgWage; }
+                }
+
+                let grossPay = r.totalBasePay + extraPay + r.juhyuPay;
+                let taxAmount = Math.floor(grossPay * r.taxRate); let netPay = grossPay - taxAmount;
+                storeTotal += netPay;
+
+                finalOutputList.push({ baseName: r.baseName, avgWage: avgWage, totalHours: r.totalHours, wageBreakdown: r.wageBreakdown, totalBasePay: r.totalBasePay, juhyuPay: r.juhyuPay, extraPay: extraPay, taxRate: r.taxRate, taxAmount: taxAmount, netPay: netPay });
+
+                let breakdownStr = ''; let wageKeys = Object.keys(r.wageBreakdown).sort();
+                if (wageKeys.length > 1) { 
+                    breakdownStr = '<div style="margin-top:6px; padding:6px; background:#e9ecef; border-radius:4px; font-size:11px; color:#495057; text-align:left; line-height:1.4;">';
+                    wageKeys.forEach(k => {
+                        let wage = parseInt(k); let hours = r.wageBreakdown[k]; let subTotal = wage * hours;
+                        breakdownStr += `· ${wage.toLocaleString()}원 × <strong>${hours}H</strong> = <span style="color:#d32f2f; font-weight:bold;">${Math.floor(subTotal).toLocaleString()}원</span><br>`;
+                    });
+                    breakdownStr += '</div>';
+                }
+
+                let taxTypeStr = r.taxRate == 0.094 ? '4대보험(9.4%)' : (r.taxRate == 0.033 ? '프리랜서(3.3%)' : '미공제');
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${r.baseName}</strong><br><span style="font-size:10px;color:#777;">(평균시급: ${Math.floor(avgWage).toLocaleString()}원)</span></td>
+                        <td><div style="font-size:14px; font-weight:bold;">${r.totalHours} 시간</div>${breakdownStr}</td>
+                        <td>${Math.floor(r.totalBasePay).toLocaleString()}원</td>
+                        <td style="font-size:11px; color:#555;">주휴: ${Math.floor(r.juhyuPay).toLocaleString()}원<br>가산: ${Math.floor(extraPay).toLocaleString()}원</td>
+                        <td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br><strong>-${taxAmount.toLocaleString()}원</strong></td>
+                        <td style="color:#00529b; font-weight:bold; font-size:15px;">${Math.floor(netPay).toLocaleString()}원</td>
+                    </tr>
+                `;
+                
+                // 카카오톡 텍스트 직원별 내역 추가
+                txt += `👤 ${r.baseName}\n- 총 근로시간: ${r.totalHours}시간\n- 실수령액: ${Math.floor(netPay).toLocaleString()}원\n\n`;
+            }
+
+            if(tbody.innerHTML === '') { tbody.innerHTML = '<tr><td colspan="6">해당 기간 내 등록된 근무 데이터가 없습니다.</td></tr>'; }
+
+            txt += `💰 점포 총 인건비 지출액: ${Math.floor(storeTotal).toLocaleString()}원\n`;
+            currentKakaoText = txt; // 전역 변수 저장
+
+            document.getElementById('resultPeriod').innerText = `${startStr} ~ ${endStr}`;
+            document.getElementById('totalStoreNet').innerText = `총 지급액: ${Math.floor(storeTotal).toLocaleString()} 원`;
+            document.getElementById('resultPanel').style.display = 'block';
+            document.getElementById('resultPanel').scrollIntoView({ behavior: 'smooth' });
+
+            currentCalcSnapshot = { startStr: startStr, endStr: endStr, storeTotal: storeTotal, list: finalOutputList };
+        }
+
+        // 카카오톡 복사 기능 로직
+        function copyToKakao() {
+            if(!currentKakaoText) return alert("먼저 급여 산출을 진행하십시오.");
+            
+            // Clipboard API (모바일/PC 지원)
+            navigator.clipboard.writeText(currentKakaoText).then(() => {
+                alert("✅ 정산 요약본이 복사되었습니다.\n동업 대표님과의 카카오톡 채팅창에 '붙여넣기' 하세요.");
+            }).catch(err => {
+                // Clipboard API 지원하지 않는 브라우저 대응 우회 로직
+                const textArea = document.createElement("textarea");
+                textArea.value = currentKakaoText;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    alert("✅ 정산 요약본이 복사되었습니다.\n동업 대표님과의 카카오톡 채팅창에 '붙여넣기' 하세요.");
+                } catch (e) {
+                    alert("복사에 실패했습니다. 브라우저 설정을 확인해주세요.");
+                }
+                document.body.removeChild(textArea);
+            });
+        }
+
+        function saveSnapshot() {
+            if(!currentCalcSnapshot || currentCalcSnapshot.list.length === 0) return alert("저장할 내역이 없습니다.");
+            let title = prompt("보관할 정산 대장의 이름을 입력하십시오.", `${currentCalcSnapshot.startStr} ~ ${currentCalcSnapshot.endStr} 급여 대장`);
+            if(!title) return; 
+            let record = { id: 'S_' + Date.now(), title: title, timestamp: new Date().toLocaleString(), data: currentCalcSnapshot };
+            db.settlements.push(record); saveDB();
+            alert(`[${title}] 내역이 영구 보관함에 안전하게 저장되었습니다.`);
+        }
+
+        function renderHistoryList() {
+            const listDiv = document.getElementById('historyList'); listDiv.innerHTML = '';
+            let reversed = [...db.settlements].reverse();
+            reversed.forEach(record => {
+                let card = document.createElement('div'); card.className = 'history-card'; card.onclick = () => renderHistoryDetail(record.id);
+                card.innerHTML = `
+                    <div class="history-info"><h4>📄 ${record.title}</h4><p>저장일시: ${record.timestamp}</p><p>기간: ${record.data.startStr} ~ ${record.data.endStr} | <strong>총액: ${Math.floor(record.data.storeTotal).toLocaleString()}원</strong></p></div>
+                    <button class="del-btn" style="background:#d9534f;" onclick="deleteHistory('${record.id}', event)">삭제</button>
+                `;
+                listDiv.appendChild(card);
+            });
+            if(reversed.length === 0) {
+                listDiv.innerHTML = '<p style="color:#777; font-size:13px; text-align:center;">보관된 내역이 없습니다.</p>';
+                document.getElementById('historyDetailArea').innerHTML = '좌측에서 내역을 선택하십시오.';
+            }
+        }
+
+        function renderHistoryDetail(id) {
+            document.querySelectorAll('.history-card').forEach(c => c.classList.remove('active')); event.currentTarget.classList.add('active');
+            const record = db.settlements.find(s => s.id === id); if(!record) return;
+            let html = `<h3 style="margin-top:0; color:#333; font-size:18px;">${record.title}</h3><div style="font-size:13px; color:#555; margin-bottom:15px;">기간: ${record.data.startStr} ~ ${record.data.endStr}<br>저장: ${record.timestamp}</div><div style="overflow-x:auto;"><table class="result-table"><thead><tr><th>이름</th><th>총 시간</th><th>기본급</th><th>수당</th><th>세금</th><th>실수령액</th></tr></thead><tbody>`;
+            record.data.list.forEach(r => {
+                let taxTypeStr = r.taxRate == 0.094 ? '4대' : (r.taxRate == 0.033 ? '3.3%' : '무공제');
+                html += `<tr><td><strong>${r.baseName}</strong></td><td>${r.totalHours}H</td><td>${Math.floor(r.totalBasePay).toLocaleString()}</td><td style="font-size:11px;">주: ${Math.floor(r.juhyuPay).toLocaleString()}<br>가: ${Math.floor(r.extraPay).toLocaleString()}</td><td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br>-${r.taxAmount.toLocaleString()}</td><td style="color:#00529b; font-weight:bold;">${Math.floor(r.netPay).toLocaleString()}원</td></tr>`;
+            });
+            html += `</tbody></table></div><div class="total-amount" style="margin-top:20px;">총 지급액: ${Math.floor(record.data.storeTotal).toLocaleString()} 원</div>`;
+            document.getElementById('historyDetailArea').innerHTML = html;
+        }
+
+        function deleteHistory(id, event) {
+            event.stopPropagation(); if(!confirm("이 기록을 영구 삭제하시겠습니까?")) return;
+            db.settlements = db.settlements.filter(s => s.id !== id); saveDB(); renderHistoryList();
+            document.getElementById('historyDetailArea').innerHTML = '좌측에서 내역을 선택하십시오.';
+        }
+
+        function getLifetimeAutoStats(baseName) {
+            let dates = new Set(); let totalHours = 0; let totalPay = 0; 
+            for(let key in db.schedule) {
+                let workersInHour = db.schedule[key];
+                for(let wId of workersInHour) {
+                    const w = db.workers.find(x => x.id === wId);
+                    if(w && getBaseName(w.name) === baseName) { dates.add(key.split('_')[0]); totalHours += 1; totalPay += w.wage; break; }
+                }
+            }
+            let sortedDates = Array.from(dates).sort();
+            return { startDate: sortedDates.length > 0 ? sortedDates[0] : null, endDate: sortedDates.length > 0 ? sortedDates[sortedDates.length - 1] : null, totalDays: sortedDates.length, totalHours, totalPay, extraPay: 0 }; 
+        }
+
+        function renderDashboard() {
+            const tbody = document.getElementById('dashboardBody'); tbody.innerHTML = '';
+            let baseNames = new Set(); db.workers.forEach(w => baseNames.add(getBaseName(w.name)));
+            baseNames.forEach(bName => {
+                let auto = getLifetimeAutoStats(bName); let ov = db.overrides[bName] || {};
+                let start = ov.startDate || auto.startDate || '-'; let end = ov.endDate || auto.endDate || '-';
+                let days = ov.totalDays !== undefined && ov.totalDays !== "" ? ov.totalDays : auto.totalDays; let hours = ov.totalHours !== undefined && ov.totalHours !== "" ? ov.totalHours : auto.totalHours;
+                let pay = ov.totalPay !== undefined && ov.totalPay !== "" ? ov.totalPay : auto.totalPay; let extra = ov.totalExtraPay !== undefined && ov.totalExtraPay !== "" ? ov.totalExtraPay : auto.extraPay;
+                let gross = Number(pay) + Number(extra);
+                let sampleW = db.workers.find(x => getBaseName(x.name) === bName); let taxStr = sampleW ? (sampleW.tax == 0.094 ? '4대보험 (9.4%)' : (sampleW.tax == 0.033 ? '프리랜서 (3.3%)' : '무공제')) : '-';
+                let sTag = ov.startDate ? '<span class="manual-tag">수동</span>' : ''; let eTag = ov.endDate ? '<span class="manual-tag">수동</span>' : ''; let dTag = ov.totalDays !== undefined && ov.totalDays !== "" ? '<span class="manual-tag">수동</span>' : ''; let hTag = ov.totalHours !== undefined && ov.totalHours !== "" ? '<span class="manual-tag">수동</span>' : ''; let pTag = (ov.totalPay !== undefined && ov.totalPay !== "") || (ov.totalExtraPay !== undefined && ov.totalExtraPay !== "") ? '<span class="manual-tag">수동</span>' : '';
+
+                tbody.innerHTML += `<tr><td style="font-size:16px; font-weight:bold; color:#333;">${bName}</td><td style="color:#d32f2f; font-weight:bold;">${taxStr}</td><td>${start}${sTag}</td><td>${end}${eTag}</td><td style="font-weight:bold;">${days}일 / ${hours}H ${dTag}${hTag}</td><td style="font-weight:bold; color:#00529b;">${Math.floor(gross).toLocaleString()}원 ${pTag}</td><td><button style="font-size:12px; font-weight:bold; padding:6px 10px; cursor:pointer; background:#ffc107; border:none; border-radius:4px;" onclick="openModal('${bName}')">⚙️ 상세설정</button></td></tr>`;
+            });
+            if(baseNames.size === 0) { tbody.innerHTML = '<tr><td colspan="7">등록된 직원이 없습니다.</td></tr>'; }
+        }
+
+        function openModal(bName) {
+            document.getElementById('modalBaseName').value = bName; document.getElementById('modalWorkerName').innerText = bName;
+            let ov = db.overrides[bName] || {};
+            document.getElementById('ovStart').value = ov.startDate || ''; document.getElementById('ovEnd').value = ov.endDate || '';
+            document.getElementById('ovDays').value = ov.totalDays !== undefined ? ov.totalDays : ''; document.getElementById('ovHours').value = ov.totalHours !== undefined ? ov.totalHours : '';
+            document.getElementById('ovPay').value = ov.totalPay !== undefined ? ov.totalPay : ''; document.getElementById('ovExtra').value = ov.totalExtraPay !== undefined ? ov.totalExtraPay : '';
+            document.getElementById('overrideModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('overrideModal').style.display = 'none'; }
+
+        function saveOverrides() {
+            let bName = document.getElementById('modalBaseName').value; if(!db.overrides[bName]) db.overrides[bName] = {}; let ov = db.overrides[bName];
+            ov.startDate = document.getElementById('ovStart').value; ov.endDate = document.getElementById('ovEnd').value; ov.totalDays = document.getElementById('ovDays').value; ov.totalHours = document.getElementById('ovHours').value; ov.totalPay = document.getElementById('ovPay').value; ov.totalExtraPay = document.getElementById('ovExtra').value;
+            saveDB(); closeModal(); renderDashboard();
+        }
+
+        initDB();
+    </script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('SW 등록 완료:', reg.scope))
+            .catch(err => console.log('SW 등록 실패:', err));
+        });
+      }
+    </script>
+</body>
+</html>

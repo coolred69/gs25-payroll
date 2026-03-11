@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GS25 PWA 설치 가이드</title>
+<style>
+  body { font-family: 'Malgun Gothic', sans-serif; max-width: 700px; margin: auto; padding: 20px; background: #f4f6f9; }
+  h1 { color: #00529b; border-bottom: 3px solid #00529b; padding-bottom: 10px; }
+  .step { background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px; border-left: 5px solid #00529b; box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+  .step h3 { margin-top: 0; color: #d32f2f; }
+  .badge { background: #00529b; color: white; border-radius: 50%; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 8px; }
+  code { background: #e9ecef; padding: 3px 8px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+  .warn { background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 6px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h1>📱 GS25 노무시스템 앱 설치 가이드</h1>
+
+<div class="step">
+  <h3><span class="badge">1</span>파일 호스팅 준비</h3>
+  <p>이 폴더 전체를 웹서버에 올려야 합니다. <b>무료 방법:</b></p>
+  <ul>
+    <li>✅ <b>GitHub Pages</b> — 무료, 영구적 (권장)</li>
+    <li>✅ <b>Netlify Drop</b> — <code>netlify.com/drop</code> 접속 후 폴더 드래그 앤 드롭</li>
+    <li>✅ <b>Vercel</b> — GitHub 연동 무료 배포</li>
+  </ul>
+  <div class="warn">⚠️ 로컬 파일(file://)로는 PWA 설치 불가. 반드시 https:// URL 필요</div>
+</div>
+
+<div class="step">
+  <h3><span class="badge">2</span>Android 설치 방법 (갤럭시 폴드7)</h3>
+  <ol>
+    <li>크롬 브라우저로 배포된 URL 접속</li>
+    <li>우측 상단 메뉴(⋮) 탭</li>
+    <li><b>"앱 설치"</b> 또는 <b>"홈 화면에 추가"</b> 선택</li>
+    <li>설치 완료 — 앱 서랍에 GS25노무 아이콘 생성</li>
+  </ol>
+</div>
+
+<div class="step">
+  <h3><span class="badge">3</span>iOS 설치 방법 (아이폰/아이패드)</h3>
+  <ol>
+    <li>Safari로 URL 접속 (크롬 불가, 반드시 Safari)</li>
+    <li>하단 공유 버튼(□↑) 탭</li>
+    <li><b>"홈 화면에 추가"</b> 선택</li>
+    <li>설치 완료</li>
+  </ol>
+</div>
+
+<div class="step">
+  <h3><span class="badge">4</span>PC(Windows) 설치 방법</h3>
+  <ol>
+    <li>Chrome 또는 Edge로 URL 접속</li>
+    <li>주소창 우측 설치 아이콘(⊕) 클릭</li>
+    <li><b>"설치"</b> 클릭 — 독립 창 앱으로 실행됨</li>
+  </ol>
+</div>
+
+<div class="step">
+  <h3>🔑 핵심 특징</h3>
+  <ul>
+    <li>✅ <b>완전 오프라인 동작</b> — 인터넷 끊겨도 정상 작동</li>
+    <li>✅ <b>데이터 보존</b> — 기기 localStorage에 영구 저장</li>
+    <li>✅ <b>앱 아이콘</b> — 홈화면/앱 서랍에 GS25 전용 아이콘</li>
+    <li>✅ <b>전체화면</b> — 브라우저 UI 없이 네이티브 앱처럼 실행</li>
+  </ul>
+</div>
+
+</body>
+</html>
