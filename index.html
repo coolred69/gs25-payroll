@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-title" content="GS25노무">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
 
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>GS25 평택점 노무 시스템 V13 (Firebase 연동)</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
@@ -117,6 +117,88 @@
         .override-row label { font-size: 14px; font-weight: bold; color: #555; width: 120px; }
         .override-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
     
+
+        /* ===== 모바일 최적화 ===== */
+        @media (max-width: 768px) {
+            body { padding: 8px; font-size: 14px; }
+            .container { padding: 12px; border-radius: 6px; }
+            h2 { font-size: 17px; }
+
+            /* 상단 네비 — 아이콘+짧은 텍스트 */
+            .top-nav { gap: 4px; padding-bottom: 6px; margin-bottom: 12px; }
+            .nav-btn { min-width: unset; padding: 10px 6px; font-size: 12px; border-radius: 6px 6px 0 0; }
+
+            /* 레이아웃 단일 컬럼 */
+            .layout-grid { grid-template-columns: 1fr; gap: 10px; }
+
+            /* 패널 */
+            .panel { padding: 12px; margin-bottom: 10px; }
+            .panel h3 { font-size: 14px; }
+
+            /* 입력 요소 터치 친화적 크기 */
+            .input-group input,
+            .input-group select { padding: 11px 8px; font-size: 15px; }
+            button.primary-btn { padding: 13px; font-size: 15px; }
+            button.calc-btn { padding: 14px; font-size: 16px; }
+
+            /* 근무자 리스트 */
+            .worker-list { max-height: 180px; }
+            .worker-item { padding: 10px 8px; }
+
+            /* 주간 네비 */
+            .week-nav { padding: 8px; font-size: 13px; }
+            .week-nav button { padding: 8px 12px; font-size: 13px; }
+            #weekLabel { font-size: 12px; text-align: center; }
+
+            /* 타임테이블 — 가로 스크롤 + 셀 크게 */
+            .chart-container { -webkit-overflow-scrolling: touch; }
+            .timetable { min-width: 520px; font-size: 11px; }
+            .timetable th, .timetable td { height: 36px; }
+            .time-cell { font-size: 10px; }
+
+            /* 정산 결과 테이블 — 카드형 변환 */
+            .result-table thead { display: none; }
+            .result-table tr { display: block; margin-bottom: 12px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+            .result-table td { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: none; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+            .result-table td:before { content: attr(data-label); font-weight: bold; color: #00529b; font-size: 11px; min-width: 80px; }
+            .result-table td:last-child { border-bottom: none; background: #f8f9fa; font-size: 15px; }
+            .total-amount { font-size: 18px; }
+
+            /* 결과 버튼 그룹 */
+            .result-btn-group { flex-direction: column; }
+            .result-btn-group button { min-width: unset; width: 100%; padding: 14px; font-size: 15px; }
+
+            /* 대시보드 테이블 — 카드형 */
+            .dashboard-table { min-width: unset; font-size: 13px; }
+            .dashboard-table thead { display: none; }
+            .dashboard-table tr { display: block; margin-bottom: 12px; border: 2px solid #e3f2fd; border-radius: 8px; overflow: hidden; }
+            .dashboard-table td { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+            .dashboard-table td:before { content: attr(data-label); font-weight: bold; color: #555; font-size: 11px; min-width: 90px; }
+            .dashboard-table td:last-child { border-bottom: none; }
+
+            /* 히스토리 카드 */
+            .history-card { flex-direction: column; align-items: flex-start; gap: 8px; }
+            .history-info h4 { font-size: 14px; }
+
+            /* 모달 */
+            .modal-content { padding: 16px; width: 95%; }
+            .override-row { flex-direction: column; gap: 4px; }
+            .override-row label { width: 100%; }
+
+            /* 동기화 상태 */
+            .sync-status { bottom: 10px; right: 10px; font-size: 11px; padding: 6px 10px; }
+
+            /* 액션 버튼 그룹 */
+            .action-group { gap: 6px; }
+            button.copy-btn, button.clear-btn { padding: 10px; font-size: 13px; }
+        }
+
+        /* 터치 드래그 지원 */
+        @media (pointer: coarse) {
+            .timetable th, .timetable td { height: 40px; }
+            .time-cell { font-size: 10px; }
+        }
+
         /* 동기화 상태 표시 */
         .sync-status { position: fixed; bottom: 20px; right: 20px; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; z-index: 9999; transition: all 0.4s; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
         .sync-ok   { background: #28a745; color: white; }
@@ -212,7 +294,7 @@
                                 <thead>
                                     <tr id="timetableHeader"></tr>
                                 </thead>
-                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()">
+                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()" ontouchstart="touchStart(event)" ontouchmove="touchMove(event)" ontouchend="endDrag()">
                                 </tbody>
                             </table>
                         </div>
@@ -838,6 +920,53 @@
             ov.startDate = document.getElementById('ovStart').value; ov.endDate = document.getElementById('ovEnd').value; ov.totalDays = document.getElementById('ovDays').value; ov.totalHours = document.getElementById('ovHours').value; ov.totalPay = document.getElementById('ovPay').value; ov.totalExtraPay = document.getElementById('ovExtra').value;
             saveDB(); closeModal(); renderDashboard();
         }
+
+
+        // ===== 터치 드래그 지원 (모바일) =====
+        function getTouchCell(e) {
+            const touch = e.touches[0];
+            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            return el && el.classList.contains('time-cell') ? el : null;
+        }
+        function touchStart(e) {
+            e.preventDefault();
+            const cell = getTouchCell(e);
+            if (!cell) return;
+            // mousedown 이벤트 시뮬레이션
+            const me = new MouseEvent('mousedown', { bubbles: true });
+            cell.dispatchEvent(me);
+        }
+        function touchMove(e) {
+            e.preventDefault();
+            const cell = getTouchCell(e);
+            if (!cell) return;
+            const me = new MouseEvent('mouseover', { bubbles: true });
+            cell.dispatchEvent(me);
+        }
+
+        // 대시보드 테이블 data-label 자동 삽입
+        function addDataLabels() {
+            // result-table
+            const rHeaders = ['이름(평균시급)', '총 근로시간', '기본급', '주휴/가산수당', '공제내역', '실수령액'];
+            document.querySelectorAll('.result-table tbody tr').forEach(tr => {
+                tr.querySelectorAll('td').forEach((td, i) => {
+                    if(rHeaders[i]) td.setAttribute('data-label', rHeaders[i]);
+                });
+            });
+            // dashboard-table
+            const dHeaders = ['직원명', '공제유형', '최초근무일', '마지막근무일', '누적일수/시간', '누적급여', '관리'];
+            document.querySelectorAll('.dashboard-table tbody tr').forEach(tr => {
+                tr.querySelectorAll('td').forEach((td, i) => {
+                    if(dHeaders[i]) td.setAttribute('data-label', dHeaders[i]);
+                });
+            });
+        }
+
+        // 기존 renderDashboard, calculatePayroll 후 data-label 갱신
+        const _origRenderDash = renderDashboard;
+        renderDashboard = function() { _origRenderDash(); setTimeout(addDataLabels, 50); };
+        const _origCalcPayroll = calculatePayroll;
+        calculatePayroll = function() { _origCalcPayroll(); setTimeout(addDataLabels, 50); };
 
         initDB();
     </script>
