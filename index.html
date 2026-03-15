@@ -1,6 +1,23 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
+        <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0066cc">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="GS25급여">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(r => console.log('SW:', r.scope))
+                .catch(e => console.log('SW 실패:', e));
+        });
+    }
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.0)</title>
@@ -104,7 +121,30 @@
         .override-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed #eee; padding-bottom: 8px; }
         .override-row label { font-size: 14px; font-weight: bold; color: #555; width: 120px; }
         .override-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-    </style>
+    
+/* ===== 모바일 최적화 ===== */
+@media (max-width: 768px) {
+    body { font-size: 14px; padding: 8px; }
+    .container { padding: 8px; margin: 0; width: 100%; }
+    button, .btn { min-height: 44px; font-size: 15px; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    input, select, textarea { font-size: 16px; min-height: 40px; }
+    h1 { font-size: 18px; } h2 { font-size: 16px; } h3 { font-size: 14px; }
+    .tabs, .nav-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+}
+#sync-status {
+    position: fixed; bottom: 16px; right: 16px;
+    padding: 6px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: bold; z-index: 9999;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: all 0.3s;
+    pointer-events: none;
+}
+#sync-status.syncing { background: #FFF9C4; color: #F57F17; }
+#sync-status.synced  { background: #E8F5E9; color: #2E7D32; }
+#sync-status.error   { background: #FFEBEE; color: #C62828; }
+#sync-status.offline { background: #F5F5F5; color: #757575; }
+/* ===== END 모바일 최적화 ===== */
+</style>
 </head>
 <body>
     <div class="container">
@@ -167,6 +207,18 @@
                         <div class="input-group">
                             <label>정산 종료일</label>
                             <input type="date" id="calcEnd" onchange="saveSettings()">
+                        </div>
+                        <div class="input-group">
+                            <label>주휴 기산 요일</label>
+                            <select id="weekStartDay" onchange="saveSettings()">
+                                <option value="1">월요일 시작 (기본, 월~일)</option>
+                                <option value="0">일요일 시작 (일~토)</option>
+                                <option value="2">화요일 시작 (화~월)</option>
+                                <option value="3">수요일 시작 (수~화)</option>
+                                <option value="4">목요일 시작 (목~수)</option>
+                                <option value="5">금요일 시작 (금~목)</option>
+                                <option value="6">토요일 시작 (토~금)</option>
+                            </select>
                         </div>
                         <button class="primary-btn calc-btn" onclick="calculatePayroll()">💰 기간 총 급여 산출 (세후)</button>
                     </div>
@@ -323,6 +375,7 @@
             db.settings.calcStart = document.getElementById('calcStart').value;
             db.settings.calcEnd = document.getElementById('calcEnd').value;
             db.settings.isOver5 = document.getElementById('isOver5').value;
+            db.settings.weekStartDay = document.getElementById('weekStartDay').value;
             saveDB();
             checkAlert();
         }
@@ -361,13 +414,32 @@
             document.getElementById('calcStart').value = db.settings.calcStart || formatDate(firstDay);
             document.getElementById('calcEnd').value = db.settings.calcEnd || formatDate(lastDay);
             if(db.settings.isOver5) document.getElementById('isOver5').value = db.settings.isOver5;
+            if(db.settings.weekStartDay) document.getElementById('weekStartDay').value = db.settings.weekStartDay;
 
             checkAlert();
             updateWorkerList();
             renderWeek();
         }
 
-        function saveDB() { localStorage.setItem('gs25_db_v8', JSON.stringify(db)); }
+        function saveDB() {
+            // localStorage 즉시 백업
+            localStorage.setItem('gs25_db_v8', JSON.stringify(db));
+            // Firebase 0.8초 디바운스
+            setSyncStatus('syncing', '☁️ 저장 중...');
+            clearTimeout(window._saveTimer);
+            window._saveTimer = setTimeout(() => {
+                if (window._fbRef) {
+                    window._fbSet(window._fbRef, db)
+                        .then(() => setSyncStatus('synced', '✅ 동기화 완료'))
+                        .catch(e => setSyncStatus('error', '❌ ' + e.message));
+                }
+            }, 800);
+        }
+        function setSyncStatus(state, msg) {
+            let el = document.getElementById('sync-status');
+            if (!el) { el = document.createElement('div'); el.id = 'sync-status'; document.body.appendChild(el); }
+            el.className = state; el.textContent = msg;
+        }
 
         function formatDate(date) {
             const y = date.getFullYear();
@@ -545,18 +617,32 @@
 
             if(!startStr || !endStr || startStr > endStr) return alert("정산 기간을 올바르게 설정하십시오.");
 
+            // ★ 주휴 기산요일 (0=일, 1=월, ..., 6=토) 
+            const weekStartDay = parseInt(document.getElementById('weekStartDay').value || '1');
+
+            // 날짜 → 해당 주의 기산요일(월요일 또는 설정값) 기준 주차 키 반환
+            function getWeekKey(date) {
+                let d = new Date(date);
+                let dow = d.getDay(); // 0=일~6=토
+                let diff = (dow - weekStartDay + 7) % 7;
+                d.setDate(d.getDate() - diff);
+                return formatDate(d);
+            }
+
             let results = {};
             const payStart = new Date(startStr);
             const payEnd = new Date(endStr);
 
-            // ★ 경계 주차 보정: 정산 기간 양 끝의 불완전한 주를 완전한 주(월~일)로 확장
+            // ★ 경계 주차 보정: 정산 기간 양 끝의 불완전한 주를 설정된 기산요일 기준 완전한 주로 확장
             const scanStart = new Date(payStart);
-            const sd = scanStart.getDay();
-            scanStart.setDate(scanStart.getDate() - (sd === 0 ? 6 : sd - 1));
+            const sdd = scanStart.getDay();
+            const sDiff = (sdd - weekStartDay + 7) % 7;
+            scanStart.setDate(scanStart.getDate() - sDiff);
 
             const scanEnd = new Date(payEnd);
-            const ed = scanEnd.getDay();
-            scanEnd.setDate(scanEnd.getDate() + (ed === 0 ? 0 : 7 - ed));
+            const edd = scanEnd.getDay();
+            const eDiff = (6 - ((edd - weekStartDay + 7) % 7));
+            scanEnd.setDate(scanEnd.getDate() + eDiff);
 
             let curr = new Date(scanStart);
 
@@ -564,10 +650,7 @@
                 const dateStr = formatDate(curr);
                 const isInPayPeriod = (curr >= payStart && curr <= payEnd);
 
-                let temp = new Date(curr);
-                const day = temp.getDay();
-                temp.setDate(temp.getDate() - (day === 0 ? 6 : day - 1));
-                const weekKey = formatDate(temp);
+                const weekKey = getWeekKey(curr);
 
                 let dailyHoursMap = {};
 
@@ -783,5 +866,53 @@
 
         initDB();
     </script>
+
+    <!-- Firebase SDK (Realtime Database) -->
+    <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import { getDatabase, ref, set, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    const firebaseConfig = {
+        apiKey: "AIzaSyAkG-AxbwFt9MUlP9E3alAbIjN9-HHkWE8",
+        authDomain: "gs25-payroll.firebaseapp.com",
+        databaseURL: "https://gs25-payroll-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "gs25-payroll",
+        storageBucket: "gs25-payroll.firebasestorage.app",
+        messagingSenderId: "244037450297",
+        appId: "1:244037450297:web:c1fa4b79aa38849985ebe8"
+    };
+    const app = initializeApp(firebaseConfig);
+    const fbDb = getDatabase(app);
+    const dbRef = ref(fbDb, 'gs25_data');
+    window._fbRef = dbRef;
+    window._fbSet = set;
+
+    // 실시간 리스너: Firebase → 로컬 동기화
+    onValue(dbRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data && typeof db !== 'undefined') {
+            const currentStr = JSON.stringify(db);
+            Object.assign(db, data);
+            localStorage.setItem('gs25_db_v8', JSON.stringify(db));
+            // 데이터 변경 시 UI 갱신
+            if (currentStr !== JSON.stringify(db)) {
+                if (typeof renderWeek === 'function') renderWeek();
+                if (typeof renderWorkers === 'function') renderWorkers();
+                if (typeof renderDashboard === 'function') renderDashboard();
+            }
+            if (typeof setSyncStatus === 'function') setSyncStatus('synced', '✅ 실시간 동기화');
+        }
+    }, (err) => {
+        if (typeof setSyncStatus === 'function') setSyncStatus('error', '❌ 연결 오류');
+        const local = localStorage.getItem('gs25_db_v8');
+        if (local && typeof db !== 'undefined') {
+            try { Object.assign(db, JSON.parse(local)); } catch(e) {}
+        }
+    });
+
+    window.addEventListener('offline', () => { if(typeof setSyncStatus==='function') setSyncStatus('offline','📵 오프라인'); });
+    window.addEventListener('online',  () => { if(typeof setSyncStatus==='function') setSyncStatus('synced','✅ 온라인 복구'); });
+    setTimeout(() => { if(typeof setSyncStatus==='function') setSyncStatus('syncing','☁️ 연결 중...'); }, 100);
+    </script>
+
 </body>
 </html>
