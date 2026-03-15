@@ -2,20 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <!-- ===== Firebase SDK ===== -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-    <!-- ===== PWA ===== -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#00529b">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="GS25노무">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>GS25 평택점 노무 시스템 V13 (Firebase 연동)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.0)</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
         .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #00529b; margin-bottom: 20px; }
@@ -116,102 +104,11 @@
         .override-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px dashed #eee; padding-bottom: 8px; }
         .override-row label { font-size: 14px; font-weight: bold; color: #555; width: 120px; }
         .override-row input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
-    
-
-        /* ===== 모바일 최적화 ===== */
-        @media (max-width: 768px) {
-            body { padding: 8px; font-size: 14px; }
-            .container { padding: 12px; border-radius: 6px; }
-            h2 { font-size: 17px; }
-
-            /* 상단 네비 — 아이콘+짧은 텍스트 */
-            .top-nav { gap: 4px; padding-bottom: 6px; margin-bottom: 12px; }
-            .nav-btn { min-width: unset; padding: 10px 6px; font-size: 12px; border-radius: 6px 6px 0 0; }
-
-            /* 레이아웃 단일 컬럼 */
-            .layout-grid { grid-template-columns: 1fr; gap: 10px; }
-
-            /* 패널 */
-            .panel { padding: 12px; margin-bottom: 10px; }
-            .panel h3 { font-size: 14px; }
-
-            /* 입력 요소 터치 친화적 크기 */
-            .input-group input,
-            .input-group select { padding: 11px 8px; font-size: 15px; }
-            button.primary-btn { padding: 13px; font-size: 15px; }
-            button.calc-btn { padding: 14px; font-size: 16px; }
-
-            /* 근무자 리스트 */
-            .worker-list { max-height: 180px; }
-            .worker-item { padding: 10px 8px; }
-
-            /* 주간 네비 */
-            .week-nav { padding: 8px; font-size: 13px; }
-            .week-nav button { padding: 8px 12px; font-size: 13px; }
-            #weekLabel { font-size: 12px; text-align: center; }
-
-            /* 타임테이블 — 가로 스크롤 + 셀 크게 */
-            .chart-container { -webkit-overflow-scrolling: touch; }
-            .timetable { min-width: 520px; font-size: 11px; }
-            .timetable th, .timetable td { height: 36px; }
-            .time-cell { font-size: 10px; }
-
-            /* 정산 결과 테이블 — 카드형 변환 */
-            .result-table thead { display: none; }
-            .result-table tr { display: block; margin-bottom: 12px; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-            .result-table td { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border: none; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
-            .result-table td:before { content: attr(data-label); font-weight: bold; color: #00529b; font-size: 11px; min-width: 80px; }
-            .result-table td:last-child { border-bottom: none; background: #f8f9fa; font-size: 15px; }
-            .total-amount { font-size: 18px; }
-
-            /* 결과 버튼 그룹 */
-            .result-btn-group { flex-direction: column; }
-            .result-btn-group button { min-width: unset; width: 100%; padding: 14px; font-size: 15px; }
-
-            /* 대시보드 테이블 — 카드형 */
-            .dashboard-table { min-width: unset; font-size: 13px; }
-            .dashboard-table thead { display: none; }
-            .dashboard-table tr { display: block; margin-bottom: 12px; border: 2px solid #e3f2fd; border-radius: 8px; overflow: hidden; }
-            .dashboard-table td { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
-            .dashboard-table td:before { content: attr(data-label); font-weight: bold; color: #555; font-size: 11px; min-width: 90px; }
-            .dashboard-table td:last-child { border-bottom: none; }
-
-            /* 히스토리 카드 */
-            .history-card { flex-direction: column; align-items: flex-start; gap: 8px; }
-            .history-info h4 { font-size: 14px; }
-
-            /* 모달 */
-            .modal-content { padding: 16px; width: 95%; }
-            .override-row { flex-direction: column; gap: 4px; }
-            .override-row label { width: 100%; }
-
-            /* 동기화 상태 */
-            .sync-status { bottom: 10px; right: 10px; font-size: 11px; padding: 6px 10px; }
-
-            /* 액션 버튼 그룹 */
-            .action-group { gap: 6px; }
-            button.copy-btn, button.clear-btn { padding: 10px; font-size: 13px; }
-        }
-
-        /* 터치 드래그 지원 */
-        @media (pointer: coarse) {
-            .timetable th, .timetable td { height: 40px; }
-            .time-cell { font-size: 10px; }
-        }
-
-        /* 동기화 상태 표시 */
-        .sync-status { position: fixed; bottom: 20px; right: 20px; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: bold; z-index: 9999; transition: all 0.4s; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-        .sync-ok   { background: #28a745; color: white; }
-        .sync-ing  { background: #ffc107; color: #333; }
-        .sync-err  { background: #d32f2f; color: white; }
-        .sync-off  { background: #6c757d; color: white; }
     </style>
 </head>
 <body>
-    <div id="syncStatus" class="sync-status sync-off">⏳ 연결 중...</div>
-
     <div class="container">
-        <h2>GS25 평택점 종합 노무 시스템 V13 (Firebase 실시간 연동)</h2>
+        <h2>GS25 평택점 종합 노무 시스템 (V8.0)</h2>
         
         <div id="todayDateDisplay" class="today-display"></div>
         <div id="settlementAlert" class="alert-box">
@@ -294,7 +191,7 @@
                                 <thead>
                                     <tr id="timetableHeader"></tr>
                                 </thead>
-                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()" ontouchstart="touchStart(event)" ontouchmove="touchMove(event)" ontouchend="endDrag()">
+                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()">
                                 </tbody>
                             </table>
                         </div>
@@ -442,106 +339,35 @@
             }
         }
 
-
-        // ===== Firebase 설정 =====
-        const firebaseConfig = {
-            apiKey: "AIzaSyAkG-AxbwFt9MUlP9E3alAbIjN9-HHkWE8",
-            authDomain: "gs25-payroll.firebaseapp.com",
-            databaseURL: "https://gs25-payroll-default-rtdb.asia-southeast1.firebasedatabase.app",
-            projectId: "gs25-payroll",
-            storageBucket: "gs25-payroll.firebasestorage.app",
-            messagingSenderId: "244037450297",
-            appId: "1:244037450297:web:c1fa4b79aa38849985ebe8"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const firebaseDB = firebase.database();
-        const DB_REF = firebaseDB.ref('gs25_data');
-
-        // 동기화 상태 표시 헬퍼
-        function setSyncStatus(type, msg) {
-            const el = document.getElementById('syncStatus');
-            el.className = 'sync-status ' + type;
-            el.innerText = msg;
-        }
-
-        // 저장 딜레이 타이머 (과도한 쓰기 방지)
-        let saveTimer = null;
-        function saveDB() {
-            // 로컬 백업도 동시 유지
-            localStorage.setItem('gs25_db_v8', JSON.stringify(db));
-            // Firebase 저장 (0.8초 디바운스)
-            if (saveTimer) clearTimeout(saveTimer);
-            setSyncStatus('sync-ing', '💾 저장 중...');
-            saveTimer = setTimeout(() => {
-                DB_REF.set(db)
-                    .then(() => setSyncStatus('sync-ok', '✅ 동기화 완료'))
-                    .catch(e => {
-                        setSyncStatus('sync-err', '⚠️ 오프라인 (로컬저장됨)');
-                        console.warn('Firebase 저장 실패, 로컬 저장:', e);
-                    });
-            }, 800);
-        }
-
         function initDB() {
             renderTodayInfo();
-
-            // 오프라인 대비 로컬 우선 로드
-            const localSaved = localStorage.getItem('gs25_db_v8');
-            if (localSaved) {
-                let parsed = JSON.parse(localSaved);
-                db.workers = parsed.workers || [];
-                db.schedule = parsed.schedule || {};
-                db.overrides = parsed.overrides || {};
-                db.settlements = parsed.settlements || [];
+            const saved = localStorage.getItem('gs25_db_v8'); // V8 로컬 스토리지 키 변경 (데이터 포맷 업그레이드 방지 목적)
+            if (saved) {
+                let parsed = JSON.parse(saved);
+                db.workers = parsed.workers || []; db.schedule = parsed.schedule || {};
+                db.overrides = parsed.overrides || {}; db.settlements = parsed.settlements || [];
                 db.settings = parsed.settings || {};
             }
-
+            
             const day = currentWeekStart.getDay();
             const diff = currentWeekStart.getDate() - day + (day === 0 ? -6 : 1);
             currentWeekStart.setDate(diff);
-
+            
             const today = new Date();
             const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
             const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-
+            
+            // 저장된 설정이 있으면 불러오고 없으면 기본값 세팅
             document.getElementById('calcStart').value = db.settings.calcStart || formatDate(firstDay);
             document.getElementById('calcEnd').value = db.settings.calcEnd || formatDate(lastDay);
-            if (db.settings.isOver5) document.getElementById('isOver5').value = db.settings.isOver5;
+            if(db.settings.isOver5) document.getElementById('isOver5').value = db.settings.isOver5;
 
             checkAlert();
             updateWorkerList();
             renderWeek();
-
-            // Firebase 실시간 리스너 — 다른 기기에서 변경 시 자동 반영
-            setSyncStatus('sync-ing', '🔄 서버 연결 중...');
-            DB_REF.on('value', (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    db.workers     = data.workers     || [];
-                    db.schedule    = data.schedule    || {};
-                    db.overrides   = data.overrides   || {};
-                    db.settlements = data.settlements || [];
-                    db.settings    = data.settings    || {};
-
-                    // 로컬에도 동기화
-                    localStorage.setItem('gs25_db_v8', JSON.stringify(db));
-
-                    document.getElementById('calcStart').value = db.settings.calcStart || formatDate(firstDay);
-                    document.getElementById('calcEnd').value = db.settings.calcEnd || formatDate(lastDay);
-                    if (db.settings.isOver5) document.getElementById('isOver5').value = db.settings.isOver5;
-
-                    updateWorkerList();
-                    renderGridData();
-                    setSyncStatus('sync-ok', '✅ 실시간 연동 중');
-                } else {
-                    setSyncStatus('sync-ok', '✅ 연결됨 (새 데이터)');
-                }
-            }, (error) => {
-                setSyncStatus('sync-err', '⚠️ 연결 실패 (로컬모드)');
-                console.error('Firebase 연결 오류:', error);
-            });
         }
 
+        function saveDB() { localStorage.setItem('gs25_db_v8', JSON.stringify(db)); }
 
         function formatDate(date) {
             const y = date.getFullYear();
@@ -716,15 +542,33 @@
             const startStr = document.getElementById('calcStart').value;
             const endStr = document.getElementById('calcEnd').value;
             const isOver5 = document.getElementById('isOver5').value === "true";
-            
+
             if(!startStr || !endStr || startStr > endStr) return alert("정산 기간을 올바르게 설정하십시오.");
 
-            let results = {}; 
-            let curr = new Date(startStr); const end = new Date(endStr);
-            
-            while(curr <= end) {
+            let results = {};
+            const payStart = new Date(startStr);
+            const payEnd = new Date(endStr);
+
+            // ★ 경계 주차 보정: 정산 기간 양 끝의 불완전한 주를 완전한 주(월~일)로 확장
+            const scanStart = new Date(payStart);
+            const sd = scanStart.getDay();
+            scanStart.setDate(scanStart.getDate() - (sd === 0 ? 6 : sd - 1));
+
+            const scanEnd = new Date(payEnd);
+            const ed = scanEnd.getDay();
+            scanEnd.setDate(scanEnd.getDate() + (ed === 0 ? 0 : 7 - ed));
+
+            let curr = new Date(scanStart);
+
+            while(curr <= scanEnd) {
                 const dateStr = formatDate(curr);
-                let temp = new Date(curr); const day = temp.getDay(); temp.setDate(temp.getDate() - day + (day === 0 ? -6 : 1)); const weekKey = formatDate(temp); 
+                const isInPayPeriod = (curr >= payStart && curr <= payEnd);
+
+                let temp = new Date(curr);
+                const day = temp.getDay();
+                temp.setDate(temp.getDate() - (day === 0 ? 6 : day - 1));
+                const weekKey = formatDate(temp);
+
                 let dailyHoursMap = {};
 
                 for (let h = 0; h < 24; h++) {
@@ -734,20 +578,30 @@
                         const baseName = getBaseName(w.name);
                         if(!results[baseName]) { results[baseName] = { baseName: baseName, taxRate: (w.tax || 0), totalHours: 0, totalBasePay: 0, nightHours: 0, overtimeHours: 0, juhyuPay: 0, weeks: {}, wageBreakdown: {} }; }
                         let r = results[baseName];
-                        r.totalHours += 1; r.totalBasePay += w.wage; 
-                        if (!r.wageBreakdown[w.wage]) r.wageBreakdown[w.wage] = 0; r.wageBreakdown[w.wage] += 1;
-                        if (!r.weeks[weekKey]) r.weeks[weekKey] = 0; r.weeks[weekKey] += 1;
-                        if(!dailyHoursMap[baseName]) dailyHoursMap[baseName] = 0; dailyHoursMap[baseName] += 1;
-                        if (h >= 22 || h < 6) r.nightHours += 1;
+
+                        // ★ 주차 집계: 경계 포함 전체 주 스캔 (주휴 판정용)
+                        if (!r.weeks[weekKey]) r.weeks[weekKey] = { hours: 0, wages: 0 };
+                        r.weeks[weekKey].hours += 1;
+                        r.weeks[weekKey].wages += w.wage;
+
+                        // ★ 기본급/야간/초과: 정산 기간 내 근무만 집계
+                        if (isInPayPeriod) {
+                            r.totalHours += 1; r.totalBasePay += w.wage;
+                            if (!r.wageBreakdown[w.wage]) r.wageBreakdown[w.wage] = 0; r.wageBreakdown[w.wage] += 1;
+                            if(!dailyHoursMap[baseName]) dailyHoursMap[baseName] = 0; dailyHoursMap[baseName] += 1;
+                            if (h >= 22 || h < 6) r.nightHours += 1;
+                        }
                     });
                 }
-                for (let bName in dailyHoursMap) { if (dailyHoursMap[bName] > 8) results[bName].overtimeHours += (dailyHoursMap[bName] - 8); }
+                if (isInPayPeriod) {
+                    for (let bName in dailyHoursMap) { if (dailyHoursMap[bName] > 8) results[bName].overtimeHours += (dailyHoursMap[bName] - 8); }
+                }
                 curr.setDate(curr.getDate() + 1);
             }
 
             let storeTotal = 0; let finalOutputList = [];
             const tbody = document.getElementById('resultBody'); tbody.innerHTML = '';
-            
+
             // 카카오톡 텍스트 조립 시작
             let txt = `[GS25 평택점 급여 정산 내역]\n▪ 정산 기간: ${startStr} ~ ${endStr}\n\n`;
 
@@ -756,9 +610,15 @@
 
                 let avgWage = r.totalBasePay / r.totalHours; let extraPay = 0;
                 if (isOver5) { extraPay = (r.nightHours * avgWage * 0.5) + (r.overtimeHours * avgWage * 0.5); }
-                for (let weekKey in r.weeks) {
-                    let hrsInWeek = r.weeks[weekKey];
-                    if (hrsInWeek >= 15) { r.juhyuPay += (Math.min(hrsInWeek, 40) / 40) * 8 * avgWage; }
+
+                // ★ 주휴수당: 주차별 실제 시급으로 계산, 완전한 주 기준 적용
+                for (let wk in r.weeks) {
+                    let wkData = r.weeks[wk];
+                    let hrsInWeek = wkData.hours;
+                    if (hrsInWeek >= 15) {
+                        let weekAvgWage = wkData.wages / wkData.hours;
+                        r.juhyuPay += (Math.min(hrsInWeek, 40) / 40) * 8 * weekAvgWage;
+                    }
                 }
 
                 let grossPay = r.totalBasePay + extraPay + r.juhyuPay;
@@ -921,65 +781,7 @@
             saveDB(); closeModal(); renderDashboard();
         }
 
-
-        // ===== 터치 드래그 지원 (모바일) =====
-        function getTouchCell(e) {
-            const touch = e.touches[0];
-            const el = document.elementFromPoint(touch.clientX, touch.clientY);
-            return el && el.classList.contains('time-cell') ? el : null;
-        }
-        function touchStart(e) {
-            e.preventDefault();
-            const cell = getTouchCell(e);
-            if (!cell) return;
-            // mousedown 이벤트 시뮬레이션
-            const me = new MouseEvent('mousedown', { bubbles: true });
-            cell.dispatchEvent(me);
-        }
-        function touchMove(e) {
-            e.preventDefault();
-            const cell = getTouchCell(e);
-            if (!cell) return;
-            const me = new MouseEvent('mouseover', { bubbles: true });
-            cell.dispatchEvent(me);
-        }
-
-        // 대시보드 테이블 data-label 자동 삽입
-        function addDataLabels() {
-            // result-table
-            const rHeaders = ['이름(평균시급)', '총 근로시간', '기본급', '주휴/가산수당', '공제내역', '실수령액'];
-            document.querySelectorAll('.result-table tbody tr').forEach(tr => {
-                tr.querySelectorAll('td').forEach((td, i) => {
-                    if(rHeaders[i]) td.setAttribute('data-label', rHeaders[i]);
-                });
-            });
-            // dashboard-table
-            const dHeaders = ['직원명', '공제유형', '최초근무일', '마지막근무일', '누적일수/시간', '누적급여', '관리'];
-            document.querySelectorAll('.dashboard-table tbody tr').forEach(tr => {
-                tr.querySelectorAll('td').forEach((td, i) => {
-                    if(dHeaders[i]) td.setAttribute('data-label', dHeaders[i]);
-                });
-            });
-        }
-
-        // 기존 renderDashboard, calculatePayroll 후 data-label 갱신
-        const _origRenderDash = renderDashboard;
-        renderDashboard = function() { _origRenderDash(); setTimeout(addDataLabels, 50); };
-        const _origCalcPayroll = calculatePayroll;
-        calculatePayroll = function() { _origCalcPayroll(); setTimeout(addDataLabels, 50); };
-
         initDB();
     </script>
-
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                    .then(r => console.log('SW 등록:', r.scope))
-                    .catch(e => console.log('SW 실패:', e));
-            });
-        }
-    </script>
-
 </body>
 </html>
