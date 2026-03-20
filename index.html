@@ -849,17 +849,35 @@
             if(!currentCalcSnapshot || currentCalcSnapshot.list.length === 0) return alert("저장할 내역이 없습니다.");
             let title = prompt("보관할 정산 대장의 이름을 입력하십시오.", `${currentCalcSnapshot.startStr} ~ ${currentCalcSnapshot.endStr} 급여 대장`);
             if(!title) return;
-            let note = prompt("특이사항을 입력하십시오. (없으면 취소 또는 빈칸)", "");
+
+            // 수기 입력 반영: 실지급 총액 재계산 + 차액 자동 특이사항 생성
+            let adjustedTotal = 0;
+            let autoNote = "";
+            currentCalcSnapshot.list.forEach(r => {
+                let calc = Math.floor(r.netPay);
+                let actual = manualPayMap[r.baseName] !== undefined ? manualPayMap[r.baseName] : calc;
+                adjustedTotal += actual;
+                if (manualPayMap[r.baseName] !== undefined) {
+                    let diff = actual - calc;
+                    let diffStr = diff >= 0 ? '+' + diff.toLocaleString() : diff.toLocaleString();
+                    autoNote += `[${r.baseName}] 정산${calc.toLocaleString()}→실지급${actual.toLocaleString()}원 (${diffStr}원) `;
+                }
+            });
+
+            let note = prompt("특이사항을 입력하십시오. (수기 차액은 자동 기록됩니다)", autoNote.trim());
+
             let record = {
                 id: 'S_' + Date.now(),
                 title: title,
                 timestamp: new Date().toLocaleString(),
-                note: note || "",
+                note: note !== null ? note : autoNote.trim(),
                 manualPay: Object.assign({}, manualPayMap),
+                adjustedTotal: adjustedTotal,
                 data: currentCalcSnapshot
             };
             db.settlements.push(record); saveDB();
-            alert(`[${title}] 내역이 영구 보관함에 안전하게 저장되었습니다.`);
+            alert(`[${title}] 저장 완료.
+실지급 총액: ${adjustedTotal.toLocaleString()}원`);
         }
 
         function renderHistoryList() {
@@ -871,7 +889,7 @@
                     <div class="history-info">
                         <h4>📄 ${record.title}</h4>
                         <p>저장일시: ${record.timestamp}</p>
-                        <p>기간: ${record.data.startStr} ~ ${record.data.endStr} | <strong>총액: ${Math.floor(record.data.storeTotal).toLocaleString()}원</strong></p>
+                        <p>기간: ${record.data.startStr} ~ ${record.data.endStr} | <strong>실지급총액: ${(record.adjustedTotal !== undefined ? record.adjustedTotal : Math.floor(record.data.storeTotal)).toLocaleString()}원</strong>${record.adjustedTotal !== undefined && record.adjustedTotal !== Math.floor(record.data.storeTotal) ? ` <span style="font-size:11px;color:#888;">(정산: ${Math.floor(record.data.storeTotal).toLocaleString()}원)</span>` : ''}</p>
                         ${record.note ? `<p style="color:#e65100;font-size:12px;">📝 ${record.note}</p>` : ''}
                     </div>
                     <button class="del-btn" style="background:#d9534f;" onclick="deleteHistory('${record.id}', event)">삭제</button>
@@ -890,7 +908,16 @@
             let html = `<h3 style="margin-top:0; color:#333; font-size:18px;">${record.title}</h3><div style="font-size:13px; color:#555; margin-bottom:15px;">기간: ${record.data.startStr} ~ ${record.data.endStr}<br>저장: ${record.timestamp}</div><div style="overflow-x:auto;"><table class="result-table"><thead><tr><th>이름</th><th>총 시간</th><th>기본급</th><th>수당</th><th>세금</th><th>실수령액</th></tr></thead><tbody>`;
             record.data.list.forEach(r => {
                 let taxTypeStr = r.taxRate == 0.094 ? '4대' : (r.taxRate == 0.033 ? '3.3%' : '무공제');
-                html += `<tr><td><strong>${r.baseName}</strong></td><td>${r.totalHours}H</td><td>${Math.floor(r.totalBasePay).toLocaleString()}</td><td style="font-size:11px;">주: ${Math.floor(r.juhyuPay).toLocaleString()}<br>가: ${Math.floor(r.extraPay).toLocaleString()}</td><td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br>-${r.taxAmount.toLocaleString()}</td><td style="color:#00529b; font-weight:bold;">${Math.floor(r.netPay).toLocaleString()}원</td></tr>`;
+                let calcNet = Math.floor(r.netPay);
+                let actualNet = (record.manualPay && record.manualPay[r.baseName] !== undefined) ? record.manualPay[r.baseName] : calcNet;
+                let diffHtml = '';
+                if (actualNet !== calcNet) {
+                    let diff = actualNet - calcNet;
+                    let diffStr = diff >= 0 ? '+' + diff.toLocaleString() : diff.toLocaleString();
+                    let diffColor = diff > 0 ? '#2e7d32' : '#c62828';
+                    diffHtml = `<br><span style="font-size:10px;color:#888;text-decoration:line-through;">${calcNet.toLocaleString()}원</span><br><span style="font-size:10px;color:${diffColor};">(${diffStr}원)</span>`;
+                }
+                html += `<tr><td><strong>${r.baseName}</strong></td><td>${r.totalHours}H</td><td>${Math.floor(r.totalBasePay).toLocaleString()}</td><td style="font-size:11px;">주: ${Math.floor(r.juhyuPay).toLocaleString()}<br>가: ${Math.floor(r.extraPay).toLocaleString()}</td><td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br>-${r.taxAmount.toLocaleString()}</td><td style="color:#00529b; font-weight:bold;">${actualNet.toLocaleString()}원${diffHtml}</td></tr>`;
             });
             html += `</tbody></table></div>`;
             // 수기 지급액 있으면 표시
@@ -898,11 +925,25 @@
                 html += `<div style="margin-top:12px;padding:10px;background:#fff3e0;border-radius:6px;border-left:4px solid #e65100;font-size:12px;">`;
                 html += `<div style="font-weight:bold;color:#e65100;margin-bottom:4px;">✏️ 수기 지급 내역</div>`;
                 Object.keys(record.manualPay).forEach(name => {
-                    html += `<div>· ${name}: <strong>${Number(record.manualPay[name]).toLocaleString()}원</strong></div>`;
+                    let actual = Number(record.manualPay[name]);
+                    let calcItem = record.data.list.find(r => r.baseName === name);
+                    let calcNet = calcItem ? Math.floor(calcItem.netPay) : 0;
+                    let diff = actual - calcNet;
+                    let diffStr = diff >= 0 ? '+' + diff.toLocaleString() : diff.toLocaleString();
+                    let diffColor = diff > 0 ? '#2e7d32' : (diff < 0 ? '#c62828' : '#777');
+                    html += `<div>· ${name}: 정산 ${calcNet.toLocaleString()}원 → 실지급 <strong>${actual.toLocaleString()}원</strong> <span style="color:${diffColor};">(${diffStr}원)</span></div>`;
                 });
                 html += `</div>`;
             }
-            html += `<div class="total-amount" style="margin-top:15px;">총 지급액: ${Math.floor(record.data.storeTotal).toLocaleString()} 원</div>`;
+            let dispTotal = record.adjustedTotal !== undefined ? record.adjustedTotal : Math.floor(record.data.storeTotal);
+            let calcTotal = Math.floor(record.data.storeTotal);
+            html += `<div class="total-amount" style="margin-top:15px;">실지급 총액: ${dispTotal.toLocaleString()} 원`;
+            if (record.adjustedTotal !== undefined && dispTotal !== calcTotal) {
+                let totalDiff = dispTotal - calcTotal;
+                let diffStr = totalDiff >= 0 ? '+' + totalDiff.toLocaleString() : totalDiff.toLocaleString();
+                html += ` <span style="font-size:13px;color:#888;">(정산대비 ${diffStr}원)</span>`;
+            }
+            html += `</div>`;
             // 특이사항
             if (record.note) {
                 html += `<div style="margin-top:12px;padding:12px;background:#fff8e1;border-radius:6px;border-left:4px solid #ffc107;">
