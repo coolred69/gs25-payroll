@@ -659,16 +659,14 @@
                     workersInHour.forEach(wId => {
                         const w = db.workers.find(x => x.id === wId); if(!w) return;
                         const baseName = getBaseName(w.name);
-                        if(!results[baseName]) { results[baseName] = { baseName: baseName, taxRate: (w.tax || 0), totalHours: 0, totalBasePay: 0, nightHours: 0, overtimeHours: 0, juhyuPay: 0, weeks: {}, wageBreakdown: {} }; }
+                        if(!results[baseName]) { results[baseName] = { baseName: baseName, taxRate: (w.tax || 0), totalHours: 0, totalBasePay: 0, nightHours: 0, overtimeHours: 0, juhyuPay: 0, weeks: {}, weeklyJuhyu: {}, wageBreakdown: {} }; }
                         let r = results[baseName];
 
-                        // ★ 주차 집계: 경계 포함 전체 주 스캔 (주휴 판정용)
-                        if (!r.weeks[weekKey]) r.weeks[weekKey] = { hours: 0, wages: 0 };
-                        r.weeks[weekKey].hours += 1;
-                        r.weeks[weekKey].wages += w.wage;
-
-                        // ★ 기본급/야간/초과: 정산 기간 내 근무만 집계
+                        // ★ 기본급/야간/초과/주차: 정산 기간 내 근무만 집계
                         if (isInPayPeriod) {
+                            if (!r.weeks[weekKey]) r.weeks[weekKey] = { hours: 0, wages: 0 };
+                            r.weeks[weekKey].hours += 1;
+                            r.weeks[weekKey].wages += w.wage;
                             r.totalHours += 1; r.totalBasePay += w.wage;
                             if (!r.wageBreakdown[w.wage]) r.wageBreakdown[w.wage] = 0; r.wageBreakdown[w.wage] += 1;
                             if(!dailyHoursMap[baseName]) dailyHoursMap[baseName] = 0; dailyHoursMap[baseName] += 1;
@@ -694,13 +692,15 @@
                 let avgWage = r.totalBasePay / r.totalHours; let extraPay = 0;
                 if (isOver5) { extraPay = (r.nightHours * avgWage * 0.5) + (r.overtimeHours * avgWage * 0.5); }
 
-                // ★ 주휴수당: 주차별 실제 시급으로 계산, 완전한 주 기준 적용
+                // ★ 주휴수당: 정산기간 내 실제 근무시간 기준, 주차별 금액 저장
                 for (let wk in r.weeks) {
                     let wkData = r.weeks[wk];
                     let hrsInWeek = wkData.hours;
                     if (hrsInWeek >= 15) {
                         let weekAvgWage = wkData.wages / wkData.hours;
-                        r.juhyuPay += (Math.min(hrsInWeek, 40) / 40) * 8 * weekAvgWage;
+                        let wkJuhyu = (Math.min(hrsInWeek, 40) / 40) * 8 * weekAvgWage;
+                        r.juhyuPay += wkJuhyu;
+                        r.weeklyJuhyu[wk] = { hours: hrsInWeek, amount: wkJuhyu };
                     }
                 }
 
@@ -727,7 +727,11 @@
                         <td><strong>${r.baseName}</strong><br><span style="font-size:10px;color:#777;">(평균시급: ${Math.floor(avgWage).toLocaleString()}원)</span></td>
                         <td><div style="font-size:14px; font-weight:bold;">${r.totalHours} 시간</div>${breakdownStr}</td>
                         <td>${Math.floor(r.totalBasePay).toLocaleString()}원</td>
-                        <td style="font-size:11px; color:#555;">주휴: ${Math.floor(r.juhyuPay).toLocaleString()}원<br>가산: ${Math.floor(extraPay).toLocaleString()}원</td>
+                        <td style="font-size:11px; color:#555;">
+                            <div style="font-weight:bold;color:#1a237e;margin-bottom:2px;">주휴합계: ${Math.floor(r.juhyuPay).toLocaleString()}원</div>
+                            ${Object.keys(r.weeklyJuhyu).sort().map(wk => `<div style="color:#283593;">· ${wk} 주(${r.weeklyJuhyu[wk].hours}H): <b>${Math.floor(r.weeklyJuhyu[wk].amount).toLocaleString()}원</b></div>`).join('')}
+                            <div style="margin-top:2px;color:#777;">가산: ${Math.floor(extraPay).toLocaleString()}원</div>
+                        </td>
                         <td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br><strong>-${taxAmount.toLocaleString()}원</strong></td>
                         <td style="color:#00529b; font-weight:bold; font-size:15px;">${Math.floor(netPay).toLocaleString()}원</td>
                     </tr>
