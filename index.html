@@ -1199,21 +1199,47 @@
         const data = snapshot.val();
         if (data && typeof db !== 'undefined') {
             const currentStr = JSON.stringify(db);
-            Object.assign(db, data);
+            // ★ workers/schedule 등 각 키별로 안전하게 병합 (빈 값으로 덮어쓰기 방지)
+            if (data.workers && data.workers.length > 0) db.workers = data.workers;
+            if (data.schedule) db.schedule = data.schedule;
+            if (data.overrides) db.overrides = data.overrides;
+            if (data.settlements) db.settlements = data.settlements;
+            if (data.settings) db.settings = data.settings;
             localStorage.setItem('gs25_db_v8', JSON.stringify(db));
             // 데이터 변경 시 UI 갱신
             if (currentStr !== JSON.stringify(db)) {
                 if (typeof renderWeek === 'function') renderWeek();
-                if (typeof renderWorkers === 'function') renderWorkers();
+                if (typeof updateWorkerList === 'function') updateWorkerList();
                 if (typeof renderDashboard === 'function') renderDashboard();
             }
             if (typeof setSyncStatus === 'function') setSyncStatus('synced', '✅ 실시간 동기화');
+        } else if (!data) {
+            // Firebase 데이터 없음 → 로컬 데이터 유지 후 Firebase에 업로드
+            const local = localStorage.getItem('gs25_db_v8');
+            if (local && typeof db !== 'undefined') {
+                try {
+                    const parsed = JSON.parse(local);
+                    if (parsed.workers && parsed.workers.length > 0) {
+                        Object.assign(db, parsed);
+                        if (typeof updateWorkerList === 'function') updateWorkerList();
+                        // 로컬 데이터를 Firebase에 백업
+                        if (window._fbSet && window._fbRef) {
+                            window._fbSet(window._fbRef, db);
+                        }
+                    }
+                } catch(e) {}
+            }
         }
     }, (err) => {
         if (typeof setSyncStatus === 'function') setSyncStatus('error', '❌ 연결 오류');
         const local = localStorage.getItem('gs25_db_v8');
         if (local && typeof db !== 'undefined') {
-            try { Object.assign(db, JSON.parse(local)); } catch(e) {}
+            try {
+                const parsed = JSON.parse(local);
+                Object.assign(db, parsed);
+                if (typeof updateWorkerList === 'function') updateWorkerList();
+                if (typeof renderWeek === 'function') renderWeek();
+            } catch(e) {}
         }
     });
 
