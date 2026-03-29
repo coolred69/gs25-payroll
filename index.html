@@ -722,10 +722,13 @@
                         if(!results[baseName]) { results[baseName] = { baseName: baseName, taxRate: (w.tax || 0), totalHours: 0, totalBasePay: 0, nightHours: 0, overtimeHours: 0, juhyuPay: 0, weeks: {}, weeklyJuhyu: {}, wageBreakdown: {} }; }
                         let r = results[baseName];
 
-                        // ★ 주차 집계: 달력 날짜 기준 (주휴수당용)
-                        if (!r.weeks[weekKey]) r.weeks[weekKey] = { hours: 0, wages: 0 };
-                        r.weeks[weekKey].hours += 1;
-                        r.weeks[weekKey].wages += w.wage;
+                        // ★ 주차 집계: 00~05시는 전날 주차로 귀속 (출근일 기준)
+                        let wkDate = new Date(dateStr);
+                        if (h < 6) wkDate.setDate(wkDate.getDate() - 1);
+                        let wkDateKey = getWeekKey(wkDate);
+                        if (!r.weeks[wkDateKey]) r.weeks[wkDateKey] = { hours: 0, wages: 0 };
+                        r.weeks[wkDateKey].hours += 1;
+                        r.weeks[wkDateKey].wages += w.wage;
 
                         // ★ 기본급/야간: 정산기간 내 달력 날짜 기준
                         if (isInPayPeriod) {
