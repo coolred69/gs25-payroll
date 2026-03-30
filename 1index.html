@@ -269,7 +269,6 @@
                             </table>
                         </div>
                         <div class="total-amount" id="totalStoreNet">총 지급액: 0 원</div>
-                        <div id="totalActualNet" style="display:none; font-size:15px; color:#00529b; font-weight:bold; margin-top:6px; padding:8px 14px; background:#e3f0fb; border-radius:6px; border-left:4px solid #00529b;">실 지급액: 0 원</div>
                         
                         <div class="result-btn-group">
                             <button class="save-history-btn" onclick="saveSnapshot()">💾 이 정산 내역 영구 보관 (대장 저장)</button>
@@ -971,7 +970,6 @@
             let display = radio.closest('td').querySelector('.manual-net');
             display.style.display = 'none';
             delete manualPayMap[name];
-            refreshActualTotal();
         }
 
         function updateManualPay(input) {
@@ -1000,23 +998,6 @@
                 delete manualPayMap[name];
                 display.style.display = 'none';
             }
-            refreshActualTotal();
-        }
-
-        function refreshActualTotal() {
-            if (!currentCalcSnapshot || !currentCalcSnapshot.list) return;
-            let hasManual = Object.keys(manualPayMap).length > 0;
-            let el = document.getElementById('totalActualNet');
-            if (!hasManual) { el.style.display = 'none'; return; }
-            let actualTotal = 0;
-            currentCalcSnapshot.list.forEach(r => {
-                actualTotal += manualPayMap[r.baseName] !== undefined ? manualPayMap[r.baseName] : Math.floor(r.netPay);
-            });
-            let diff = actualTotal - Math.floor(currentCalcSnapshot.storeTotal);
-            let diffStr = diff === 0 ? '±0' : (diff > 0 ? '+' + diff.toLocaleString() : diff.toLocaleString());
-            let diffColor = diff > 0 ? '#2e7d32' : (diff < 0 ? '#c62828' : '#777');
-            el.style.display = 'block';
-            el.innerHTML = `실 지급액: <strong>${actualTotal.toLocaleString()} 원</strong> <span style="font-size:13px; color:${diffColor};">(${diffStr}원)</span>`;
         }
 
         function saveSnapshot() {
