@@ -731,8 +731,9 @@
                         r.weeks[wkDateKey].hours += 1;
                         r.weeks[wkDateKey].wages += w.wage;
 
-                        // ★ 기본급/야간: 정산기간 내 달력 날짜 기준
-                        if (isInPayPeriod) {
+                        // ★ 기본급/야간: 00~05시는 귀속날짜(전날) 기준, 나머지는 달력 날짜 기준
+                        const isPayable = (h < 6) ? isOvertimeInPayPeriod : isInPayPeriod;
+                        if (isPayable) {
                             r.totalHours += 1; r.totalBasePay += w.wage;
                             if (!r.wageBreakdown[w.wage]) r.wageBreakdown[w.wage] = 0; r.wageBreakdown[w.wage] += 1;
                             if (h >= 22 || h < 6) r.nightHours += 1;
