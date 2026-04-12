@@ -406,55 +406,9 @@
             return true;
         }
 
-        function requestEditLock() {
-            // 로컬 캐시 기준 1차 체크 (빠른 피드백)
-            if (currentLock && currentLock.deviceId !== myDeviceId && Date.now() < currentLock.expires) {
-                alert(`🔒 ${currentLock.owner}가 수정 중입니다.\n잠금 만료까지 ${Math.ceil((currentLock.expires - Date.now()) / 60000)}분 남았습니다.`);
-                return;
-            }
-            const ownerName = prompt('수정자 이름을 입력하세요 (표시용)', localStorage.getItem('gs25_owner_name') || '');
-            if (ownerName === null) return;
-            const name = ownerName.trim() || '익명';
-            localStorage.setItem('gs25_owner_name', name);
-            const lock = { owner: name, deviceId: myDeviceId, lockedAt: Date.now(), expires: Date.now() + 30 * 60 * 1000 };
-
-            if (window._fbLockTransaction && window._fbLockRef) {
-                // ★ 서버 원자적 처리 — Race Condition 방지
-                window._fbLockTransaction(window._fbLockRef, (current) => {
-                    // 유효한 lock이 이미 존재하면 무조건 abort (내 기기 포함 — 중복 방지)
-                    if (current && Date.now() < current.expires) {
-                        return; // abort
-                    }
-                    return lock; // 없거나 만료 → 획득
-                }, { applyLocally: false }).then((result) => {
-                    if (result.committed) {
-                        currentLock = lock; isMyLock = true; updateLockUI();
-                    } else {
-                        const c = result.snapshot.val();
-                        if (c && c.deviceId === myDeviceId) {
-                            // 내가 이미 lock 보유
-                            currentLock = c; isMyLock = true; updateLockUI();
-                        } else {
-                            alert(`🔒 ${c ? c.owner + '가' : '다른 기기가'} 이미 수정 중입니다.\n잠금 해제 후 다시 시도하세요.`);
-                        }
-                    }
-                }).catch(() => {
-                    // 오프라인 등 오류 시 로컬만 처리
-                    currentLock = lock; isMyLock = true; updateLockUI();
-                });
-            } else {
-                currentLock = lock; isMyLock = true; updateLockUI();
-            }
-        }
-
-        function releaseEditLock() {
-            if (!isMyLock) return;
-            saveDB();
-            currentLock = null; isMyLock = false; updateLockUI();
-            if (window._fbLockSet && window._fbLockRef) {
-                window._fbLockSet(window._fbLockRef, null);
-            }
-        }
+        // 실제 구현은 Firebase module script에서 window._doRequestLock / window._doReleaseLock 으로 정의됨
+        function requestEditLock() { if (typeof window._doRequestLock === 'function') window._doRequestLock(); }
+        function releaseEditLock()  { if (typeof window._doReleaseLock === 'function') window._doReleaseLock(); }
 
         function updateLockUI() {
             const btnArea = document.getElementById('lockBtnArea');
@@ -1459,7 +1413,7 @@
     <!-- Firebase SDK (Realtime Database) -->
     <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getDatabase, ref, set, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
     const firebaseConfig = {
         apiKey: "AIzaSyAkG-AxbwFt9MUlP9E3alAbIjN9-HHkWE8",
         authDomain: "gs25-payroll.firebaseapp.com",
@@ -1475,17 +1429,48 @@
     window._fbRef = dbRef;
     window._fbSet = set;
 
-    // ── 편집 잠금 ref ──────────────────────────────
+    // ── 편집 잠금 ──────────────────────────────
     const lockRef = ref(fbDb, 'gs25_lock');
-    window._fbLockRef = lockRef;
-    window._fbLockSet = set;
-    window._fbLockTransaction = runTransaction;
 
-    // 잠금 상태 실시간 감지 — 일반 script의 변수는 window.onLockChange 경유로만 변경
+    // onValue: lock 변경 시 일반 script의 onLockChange 브릿지 호출
     onValue(lockRef, (snapshot) => {
         const lock = snapshot.val();
         if (typeof window.onLockChange === 'function') window.onLockChange(lock);
     });
+
+    // 수정할꺼야! — get으로 현재 lock 확인 후 set
+    window._doRequestLock = async function() {
+        const savedName = localStorage.getItem('gs25_owner_name') || '';
+        const ownerName = prompt('수정자 이름을 입력하세요', savedName);
+        if (ownerName === null) return;
+        const name = ownerName.trim() || '익명';
+        localStorage.setItem('gs25_owner_name', name);
+        try {
+            const snapshot = await get(lockRef);
+            const current = snapshot.val();
+            const myId = window.myDeviceId;
+            if (current && Date.now() < current.expires && current.deviceId !== myId) {
+                alert(`🔒 ${current.owner}가 수정 중입니다.\n${Math.ceil((current.expires - Date.now()) / 60000)}분 후 만료됩니다.`);
+                return;
+            }
+            const lock = { owner: name, deviceId: myId, lockedAt: Date.now(), expires: Date.now() + 30 * 60 * 1000 };
+            await set(lockRef, lock);
+            // onValue가 자동 트리거 → onLockChange 호출됨
+        } catch(e) {
+            alert('잠금 오류: 네트워크 상태를 확인하세요.');
+        }
+    };
+
+    // 저장할꺼야! — lock 해제 + saveDB
+    window._doReleaseLock = async function() {
+        try {
+            if (typeof saveDB === 'function') saveDB();
+            await set(lockRef, null);
+            // onValue 자동 트리거
+        } catch(e) {
+            if (typeof window.onLockChange === 'function') window.onLockChange(null);
+        }
+    };
 
     // 실시간 리스너: Firebase → 로컬 동기화
     onValue(dbRef, (snapshot) => {
