@@ -374,8 +374,7 @@
         let isDragging = false; let dragMode = 'add'; 
         let currentWeekStart = new Date();
         let weekSnapshot = null;
-        let currentCalcSnapshot = null; 
-        let currentKakaoText = "";
+        let currentCalcSnapshot = null;
 
         // ── 편집 잠금 ──────────────────────────────
         let myDeviceId = localStorage.getItem('gs25_device_id') || (() => {
@@ -389,11 +388,10 @@
         // module script → 일반 script 변수 업데이트 브릿지
         window.onLockChange = function(lock) {
             if (lock && Date.now() >= lock.expires) {
-                if (window._fbLockSet && window._fbLockRef) window._fbLockSet(window._fbLockRef, null);
-                lock = null;
+                lock = null; // 만료 클리어는 module의 _doReleaseLock이 처리
             }
             currentLock = lock;
-            window._currentLock = lock; // module에서 접근용
+            window._currentLock = lock;
             isMyLock = !!(lock && lock.deviceId === myDeviceId && Date.now() < lock.expires);
             updateLockUI();
         };
@@ -794,6 +792,11 @@
 
             if(!startStr || !endStr || startStr > endStr) return alert("정산 기간을 올바르게 설정하십시오.");
 
+            // 재산출 시 수기입력 초기화
+            manualPayMap = {};
+            const netEl = document.getElementById('totalActualNet');
+            if (netEl) netEl.style.display = 'none';
+
             // ★ 주휴 기산요일 (0=일, 1=월, ..., 6=토) 
             const weekStartDay = parseInt(document.getElementById('weekStartDay').value || '1');
 
@@ -993,7 +996,6 @@
             if(tbody.innerHTML === '') { tbody.innerHTML = '<tr><td colspan="6">해당 기간 내 등록된 근무 데이터가 없습니다.</td></tr>'; }
 
             txt += `💰 점포 총 인건비 지출액: ${Math.floor(storeTotal).toLocaleString()}원\n`;
-            currentKakaoText = txt; // 전역 변수 저장
 
             document.getElementById('resultPeriod').innerText = `${startStr} ~ ${endStr}`;
             document.getElementById('totalStoreNet').innerText = `총 지급액: ${Math.floor(storeTotal).toLocaleString()} 원`;
@@ -1435,7 +1437,13 @@
     // onValue: lock 변경 시 일반 script의 onLockChange 브릿지 호출
     onValue(lockRef, (snapshot) => {
         const lock = snapshot.val();
-        if (typeof window.onLockChange === 'function') window.onLockChange(lock);
+        // 만료된 잠금 서버에서 자동 클리어
+        if (lock && Date.now() >= lock.expires) {
+            set(lockRef, null);
+            if (typeof window.onLockChange === 'function') window.onLockChange(null);
+        } else {
+            if (typeof window.onLockChange === 'function') window.onLockChange(lock);
+        }
     });
 
     // 수정할꺼야! — onValue로 이미 받은 _currentLock 사용 (get() 불필요)
