@@ -791,6 +791,10 @@
 
                 let grossPay = r.totalBasePay + extraPay + r.juhyuPay;
                 let taxAmount = Math.floor(grossPay * r.taxRate); let netPay = grossPay - taxAmount;
+
+                // ★ 총 급여 0원 직원은 정산에서 제외
+                if (grossPay === 0) continue;
+
                 storeTotal += netPay;
 
                 finalOutputList.push({ baseName: r.baseName, avgWage: avgWage, totalHours: r.totalHours, wageBreakdown: r.wageBreakdown, totalBasePay: r.totalBasePay, juhyuPay: r.juhyuPay, weeklyJuhyu: r.weeklyJuhyu, nightHours: r.nightHours, overtimeHours: r.overtimeHours, extraPay: extraPay, taxRate: r.taxRate, taxType: r.taxType, taxAmount: taxAmount, netPay: netPay, grossPay: grossPay });
