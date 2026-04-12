@@ -382,6 +382,7 @@
             let id = 'dev_' + Math.random().toString(36).substr(2, 9);
             localStorage.setItem('gs25_device_id', id); return id;
         })();
+        window.myDeviceId = myDeviceId; // module script에서 접근 가능하도록 노출
         let isMyLock = false;
         let currentLock = null; // { owner, deviceId, lockedAt, expires }
 
@@ -1471,14 +1472,15 @@
     // 잠금 상태 실시간 감지
     onValue(lockRef, (snapshot) => {
         const lock = snapshot.val();
-        currentLock = lock;
         // 만료된 잠금이면 자동 클리어
         if (lock && Date.now() >= lock.expires) {
             set(lockRef, null);
-            currentLock = null;
+            window.currentLock = null;
+        } else {
+            window.currentLock = lock;
         }
-        isMyLock = !!(lock && lock.deviceId === myDeviceId && Date.now() < lock.expires);
-        if (typeof updateLockUI === 'function') updateLockUI();
+        window.isMyLock = !!(lock && lock.deviceId === window.myDeviceId && Date.now() < lock.expires);
+        if (typeof window.updateLockUI === 'function') window.updateLockUI();
     });
 
     // 실시간 리스너: Firebase → 로컬 동기화
