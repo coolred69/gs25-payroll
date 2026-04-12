@@ -394,6 +394,7 @@
         }
 
         function requestEditLock() {
+            // 로컬 캐시 기준 1차 체크 (빠른 피드백)
             if (currentLock && currentLock.deviceId !== myDeviceId && Date.now() < currentLock.expires) {
                 alert(`🔒 ${currentLock.owner}가 수정 중입니다.\n잠금 만료까지 ${Math.ceil((currentLock.expires - Date.now()) / 60000)}분 남았습니다.`);
                 return;
@@ -403,10 +404,28 @@
             const name = ownerName.trim() || '익명';
             localStorage.setItem('gs25_owner_name', name);
             const lock = { owner: name, deviceId: myDeviceId, lockedAt: Date.now(), expires: Date.now() + 30 * 60 * 1000 };
-            // 로컬 즉시 반영 (Firebase onValue 지연 대기 없이)
-            currentLock = lock; isMyLock = true; updateLockUI();
-            if (window._fbLockSet && window._fbLockRef) {
-                window._fbLockSet(window._fbLockRef, lock);
+
+            if (window._fbLockTransaction && window._fbLockRef) {
+                // ★ 서버 원자적 처리 — Race Condition 방지
+                window._fbLockTransaction(window._fbLockRef, (current) => {
+                    // 서버 현재값 기준 재확인
+                    if (current && current.deviceId !== myDeviceId && Date.now() < current.expires) {
+                        return; // abort → 다른 기기가 선점
+                    }
+                    return lock; // 잠금 획득
+                }).then((result) => {
+                    if (result.committed) {
+                        currentLock = lock; isMyLock = true; updateLockUI();
+                    } else {
+                        const c = result.snapshot.val();
+                        alert(`🔒 ${c ? c.owner : '다른 기기'}가 방금 먼저 수정을 시작했습니다.`);
+                    }
+                }).catch(() => {
+                    // 오프라인 등 오류 시 로컬만 처리
+                    currentLock = lock; isMyLock = true; updateLockUI();
+                });
+            } else {
+                currentLock = lock; isMyLock = true; updateLockUI();
             }
         }
 
@@ -1422,7 +1441,7 @@
     <!-- Firebase SDK (Realtime Database) -->
     <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getDatabase, ref, set, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    import { getDatabase, ref, set, onValue, runTransaction } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
     const firebaseConfig = {
         apiKey: "AIzaSyAkG-AxbwFt9MUlP9E3alAbIjN9-HHkWE8",
         authDomain: "gs25-payroll.firebaseapp.com",
@@ -1442,6 +1461,7 @@
     const lockRef = ref(fbDb, 'gs25_lock');
     window._fbLockRef = lockRef;
     window._fbLockSet = set;
+    window._fbLockTransaction = runTransaction;
 
     // 잠금 상태 실시간 감지
     onValue(lockRef, (snapshot) => {
