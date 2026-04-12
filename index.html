@@ -173,8 +173,8 @@
                             <input type="text" id="wName" placeholder="예: 김알바 또는 김알바_야간">
                         </div>
                         <div class="input-group">
-                            <label>적용 시급 (원)</label>
-                            <input type="number" id="wWage" value="10320" step="10" min="10320">
+                            <label>적용 시급 (원) <span style="font-size:11px;color:#888;">※ 가족은 0원 입력 가능</span></label>
+                            <input type="number" id="wWage" value="10320" step="10" min="0">
                         </div>
                         <div class="input-group">
                             <label>세금/보험 공제 설정</label>
@@ -182,6 +182,7 @@
                                 <option value="0.033" selected>3.3% 프리랜서 (기본)</option>
                                 <option value="0.094">9.4% 4대보험 가입자</option>
                                 <option value="0">공제 없음</option>
+                                <option value="family">가족 (무공제·자유급여)</option>
                             </select>
                         </div>
                         <button id="mainBtn" class="primary-btn" onclick="addOrUpdateWorker()">+ 근무자 추가 / 정보 갱신</button>
@@ -467,22 +468,25 @@
 
         function addOrUpdateWorker() {
             const name = document.getElementById('wName').value.trim();
-            const wage = parseInt(document.getElementById('wWage').value) || 10320;
-            const tax = parseFloat(document.getElementById('wTax').value);
+            const wageRaw = parseInt(document.getElementById('wWage').value);
+            const taxVal = document.getElementById('wTax').value;
+            const isFamily = taxVal === 'family';
+            const tax = isFamily ? 0 : parseFloat(taxVal);
+            const wage = isNaN(wageRaw) ? 0 : wageRaw;
             
             if (!name) return alert("근무자 이름을 입력하세요.");
-            if (wage < 10320) { alert("최저시급 미만 설정 불가"); document.getElementById('wWage').value = 10320; return; }
+            if (!isFamily && wage < 10320) { alert("최저시급 미만 설정 불가\n(가족은 '가족' 유형 선택 시 자유 입력 가능)"); document.getElementById('wWage').value = 10320; return; }
 
             if (editingWorkerId) {
                 const w = db.workers.find(x => x.id === editingWorkerId);
-                if (w) { w.name = name; w.wage = wage; w.tax = tax; }
+                if (w) { w.name = name; w.wage = wage; w.tax = tax; w.taxType = isFamily ? 'family' : ''; }
                 editingWorkerId = null;
                 document.getElementById('mainBtn').innerText = "+ 근무자 추가 / 정보 갱신";
                 document.getElementById('mainBtn').classList.remove('edit-mode');
             } else {
                 const id = 'W_' + Date.now();
                 const color = getUnusedColor();
-                db.workers.push({ id, name, wage, tax, color });
+                db.workers.push({ id, name, wage, tax, taxType: isFamily ? 'family' : '', color });
                 selectWorker(id);
             }
             document.getElementById('wName').value = ''; document.getElementById('wWage').value = 10320;
@@ -494,7 +498,8 @@
             const w = db.workers.find(x => x.id === id);
             if (!w) return;
             document.getElementById('wName').value = w.name; document.getElementById('wWage').value = w.wage;
-            if(w.tax !== undefined) document.getElementById('wTax').value = w.tax;
+            if(w.taxType === 'family') document.getElementById('wTax').value = 'family';
+            else if(w.tax !== undefined) document.getElementById('wTax').value = w.tax;
             editingWorkerId = id;
             const btn = document.getElementById('mainBtn');
             btn.innerText = "✓ 정보 갱신 완료"; btn.classList.add('edit-mode');
@@ -525,7 +530,7 @@
                 const item = document.createElement('div');
                 item.className = `worker-item ${w.id === activeWorkerId ? 'active' : ''}`;
                 item.onclick = () => selectWorker(w.id);
-                let taxStr = w.tax == 0.094 ? '4대' : (w.tax == 0.033 ? '3.3%' : '무공제');
+                let taxStr = w.taxType === 'family' ? '가족' : (w.tax == 0.094 ? '4대' : (w.tax == 0.033 ? '3.3%' : '무공제'));
                 item.innerHTML = `
                     <div><span class="worker-color" style="background:${w.color};"></span>${w.name} <span style="font-size:11px; color:#555;">(${w.wage.toLocaleString()}원 / ${taxStr})</span></div>
                     <div class="btn-group-sm"><button class="edit-btn" onclick="loadForEdit('${w.id}', event)">수정</button><button class="del-btn" onclick="deleteWorker('${w.id}', event)">삭제</button></div>
@@ -720,7 +725,7 @@
                     workersInHour.forEach(wId => {
                         const w = db.workers.find(x => x.id === wId); if(!w) return;
                         const baseName = getBaseName(w.name);
-                        if(!results[baseName]) { results[baseName] = { baseName: baseName, taxRate: (w.tax || 0), totalHours: 0, totalBasePay: 0, nightHours: 0, overtimeHours: 0, juhyuPay: 0, weeks: {}, weeklyJuhyu: {}, wageBreakdown: {} }; }
+                        if(!results[baseName]) { results[baseName] = { baseName: baseName, taxRate: (w.tax || 0), taxType: (w.taxType || ''), totalHours: 0, totalBasePay: 0, nightHours: 0, overtimeHours: 0, juhyuPay: 0, weeks: {}, weeklyJuhyu: {}, wageBreakdown: {} }; }
                         let r = results[baseName];
 
                         // ★ 주차 집계: 00~05시는 전날 주차로 귀속 (출근일 기준)
@@ -788,7 +793,7 @@
                 let taxAmount = Math.floor(grossPay * r.taxRate); let netPay = grossPay - taxAmount;
                 storeTotal += netPay;
 
-                finalOutputList.push({ baseName: r.baseName, avgWage: avgWage, totalHours: r.totalHours, wageBreakdown: r.wageBreakdown, totalBasePay: r.totalBasePay, juhyuPay: r.juhyuPay, weeklyJuhyu: r.weeklyJuhyu, nightHours: r.nightHours, overtimeHours: r.overtimeHours, extraPay: extraPay, taxRate: r.taxRate, taxAmount: taxAmount, netPay: netPay, grossPay: grossPay });
+                finalOutputList.push({ baseName: r.baseName, avgWage: avgWage, totalHours: r.totalHours, wageBreakdown: r.wageBreakdown, totalBasePay: r.totalBasePay, juhyuPay: r.juhyuPay, weeklyJuhyu: r.weeklyJuhyu, nightHours: r.nightHours, overtimeHours: r.overtimeHours, extraPay: extraPay, taxRate: r.taxRate, taxType: r.taxType, taxAmount: taxAmount, netPay: netPay, grossPay: grossPay });
 
                 let breakdownStr = ''; let wageKeys = Object.keys(r.wageBreakdown).sort();
                 if (wageKeys.length > 1) { 
@@ -800,7 +805,7 @@
                     breakdownStr += '</div>';
                 }
 
-                let taxTypeStr = r.taxRate == 0.094 ? '4대보험(9.4%)' : (r.taxRate == 0.033 ? '프리랜서(3.3%)' : '미공제');
+                let taxTypeStr = r.taxType === 'family' ? '가족(무공제)' : (r.taxRate == 0.094 ? '4대보험(9.4%)' : (r.taxRate == 0.033 ? '프리랜서(3.3%)' : '미공제'));
 
                 let formulaId = 'formula_' + r.baseName.replace(/\s/g,'_') + '_' + Date.now();
 
@@ -843,6 +848,7 @@
                                 style="width:120px;padding:4px 6px;font-size:12px;border:1px solid #90caf9;border-radius:4px;color:#1a237e;text-align:right;"
                                 oninput="updateManualPay(this)">
                             <div class="manual-net" data-name="${r.baseName}" style="font-size:11px;margin-top:3px;display:none;"></div>
+                            <button onclick="copyEmployeeMsg('${r.baseName}')" style="margin-top:8px;width:100%;font-size:11px;padding:5px 0;background:#e8f5e9;border:1px solid #66bb6a;border-radius:4px;cursor:pointer;color:#2e7d32;font-weight:bold;">📱 개인 메시지 복사</button>
                         </td>
                     </tr>
                     <tr id="${formulaId}" style="display:none;">
@@ -889,6 +895,67 @@
                     alert("복사에 실패했습니다. 브라우저 설정을 확인해주세요.");
                 }
                 document.body.removeChild(textArea);
+            });
+        }
+
+        function copyEmployeeMsg(baseName) {
+            if (!currentCalcSnapshot || !currentCalcSnapshot.list) return alert("먼저 급여 산출을 진행하십시오.");
+            const r = currentCalcSnapshot.list.find(x => x.baseName === baseName);
+            if (!r) return;
+
+            const calcNet = Math.floor(r.netPay);
+            const actual = manualPayMap[baseName] !== undefined ? manualPayMap[baseName] : calcNet;
+            const hasManual = manualPayMap[baseName] !== undefined;
+            const diff = actual - calcNet;
+            const diffStr = diff === 0 ? '±0' : (diff > 0 ? '+' + diff.toLocaleString() : diff.toLocaleString());
+
+            // 시급 분리 내역
+            let wageLines = '';
+            const wageKeys = Object.keys(r.wageBreakdown).sort();
+            if (wageKeys.length > 1) {
+                wageKeys.forEach(k => {
+                    let w = parseInt(k), h = r.wageBreakdown[k];
+                    wageLines += `  · ${w.toLocaleString()}원 × ${h}H = ${Math.floor(w*h).toLocaleString()}원\n`;
+                });
+            }
+
+            // 주휴 주차별
+            let juhyuLines = '';
+            Object.keys(r.weeklyJuhyu).sort().forEach(wk => {
+                let d = r.weeklyJuhyu[wk];
+                juhyuLines += `  · ${wk} 주 (${d.hours}H): ${Math.floor(d.amount).toLocaleString()}원\n`;
+            });
+
+            const taxLabel = r.taxType === 'family' ? '가족(무공제)' : (r.taxRate == 0.094 ? '4대보험 9.4%' : (r.taxRate == 0.033 ? '프리랜서 3.3%' : '무공제'));
+
+            let msg = `[GS25 평택점 급여 정산]\n`;
+            msg += `▪ 정산기간: ${currentCalcSnapshot.startStr} ~ ${currentCalcSnapshot.endStr}\n`;
+            msg += `▪ 성명: ${baseName}\n`;
+            msg += `━━━━━━━━━━━━━━━━━\n`;
+            msg += `• 총 근로시간: ${r.totalHours}H\n`;
+            msg += `• 기본급: ${Math.floor(r.totalBasePay).toLocaleString()}원\n`;
+            if (wageLines) msg += wageLines;
+            msg += `• 주휴수당: ${Math.floor(r.juhyuPay).toLocaleString()}원\n`;
+            if (juhyuLines) msg += juhyuLines;
+            if (r.extraPay > 0) msg += `• 가산수당(야간/연장): ${Math.floor(r.extraPay).toLocaleString()}원\n`;
+            msg += `• 공제(${taxLabel}): -${Math.floor(r.taxAmount).toLocaleString()}원\n`;
+            msg += `━━━━━━━━━━━━━━━━━\n`;
+            if (hasManual) {
+                msg += `• 정산액: ${calcNet.toLocaleString()}원\n`;
+                msg += `💰 실지급액: ${actual.toLocaleString()}원 (${diffStr}원)\n`;
+            } else {
+                msg += `💰 실수령액: ${calcNet.toLocaleString()}원\n`;
+            }
+            msg += `\n수고하셨습니다 🙏`;
+
+            navigator.clipboard.writeText(msg).then(() => {
+                alert(`✅ ${baseName} 개인 정산 메시지가 복사되었습니다.\n카카오톡에 붙여넣기 하세요.`);
+            }).catch(() => {
+                const ta = document.createElement("textarea");
+                ta.value = msg; document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); alert(`✅ ${baseName} 개인 정산 메시지가 복사되었습니다.`); }
+                catch(e) { alert("복사 실패. 브라우저 설정을 확인해주세요."); }
+                document.body.removeChild(ta);
             });
         }
 
@@ -1082,7 +1149,7 @@
             const record = db.settlements.find(s => s.id === id); if(!record) return;
             let html = `<h3 style="margin-top:0; color:#333; font-size:18px;">${record.title}</h3><div style="font-size:13px; color:#555; margin-bottom:15px;">기간: ${record.data.startStr} ~ ${record.data.endStr}<br>저장: ${record.timestamp}</div><div style="overflow-x:auto;"><table class="result-table"><thead><tr><th>이름</th><th>총 시간</th><th>기본급</th><th>수당</th><th>세금</th><th>실수령액</th></tr></thead><tbody>`;
             record.data.list.forEach(r => {
-                let taxTypeStr = r.taxRate == 0.094 ? '4대' : (r.taxRate == 0.033 ? '3.3%' : '무공제');
+                let taxTypeStr = r.taxType === 'family' ? '가족' : (r.taxRate == 0.094 ? '4대' : (r.taxRate == 0.033 ? '3.3%' : '무공제'));
                 let calcNet = Math.floor(r.netPay);
                 let actualNet = (record.manualPay && record.manualPay[r.baseName] !== undefined) ? record.manualPay[r.baseName] : calcNet;
                 let diffHtml = '';
@@ -1170,7 +1237,7 @@
                 let days = ov.totalDays !== undefined && ov.totalDays !== "" ? ov.totalDays : auto.totalDays; let hours = ov.totalHours !== undefined && ov.totalHours !== "" ? ov.totalHours : auto.totalHours;
                 let pay = ov.totalPay !== undefined && ov.totalPay !== "" ? ov.totalPay : auto.totalPay; let extra = ov.totalExtraPay !== undefined && ov.totalExtraPay !== "" ? ov.totalExtraPay : auto.extraPay;
                 let gross = Number(pay) + Number(extra);
-                let sampleW = db.workers.find(x => getBaseName(x.name) === bName); let taxStr = sampleW ? (sampleW.tax == 0.094 ? '4대보험 (9.4%)' : (sampleW.tax == 0.033 ? '프리랜서 (3.3%)' : '무공제')) : '-';
+                let sampleW = db.workers.find(x => getBaseName(x.name) === bName); let taxStr = sampleW ? (sampleW.taxType === 'family' ? '가족(무공제)' : (sampleW.tax == 0.094 ? '4대보험 (9.4%)' : (sampleW.tax == 0.033 ? '프리랜서 (3.3%)' : '무공제'))) : '-';
                 let sTag = ov.startDate ? '<span class="manual-tag">수동</span>' : ''; let eTag = ov.endDate ? '<span class="manual-tag">수동</span>' : ''; let dTag = ov.totalDays !== undefined && ov.totalDays !== "" ? '<span class="manual-tag">수동</span>' : ''; let hTag = ov.totalHours !== undefined && ov.totalHours !== "" ? '<span class="manual-tag">수동</span>' : ''; let pTag = (ov.totalPay !== undefined && ov.totalPay !== "") || (ov.totalExtraPay !== undefined && ov.totalExtraPay !== "") ? '<span class="manual-tag">수동</span>' : '';
 
                 tbody.innerHTML += `<tr><td style="font-size:16px; font-weight:bold; color:#333;">${bName}</td><td style="color:#d32f2f; font-weight:bold;">${taxStr}</td><td>${start}${sTag}</td><td>${end}${eTag}</td><td style="font-weight:bold;">${days}일 / ${hours}H ${dTag}${hTag}</td><td style="font-weight:bold; color:#00529b;">${Math.floor(gross).toLocaleString()}원 ${pTag}</td><td><button style="font-size:12px; font-weight:bold; padding:6px 10px; cursor:pointer; background:#ffc107; border:none; border-radius:4px;" onclick="openModal('${bName}')">⚙️ 상세설정</button></td></tr>`;
