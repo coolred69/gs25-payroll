@@ -208,12 +208,18 @@
                             </select>
                         </div>
                         <div class="input-group">
+                            <label>📅 월 빠른 선택</label>
+                            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:2px;">
+                                ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m=>`<button type="button" onclick="setMonth(${m})" style="flex:1;min-width:38px;padding:6px 2px;font-size:13px;font-weight:bold;background:#e3f2fd;border:1px solid #90caf9;border-radius:5px;cursor:pointer;color:#1565c0;" id="monthBtn${m}">${m}월</button>`).join('')}
+                            </div>
+                        </div>
+                        <div class="input-group">
                             <label>정산 시작일</label>
-                            <input type="date" id="calcStart" onchange="saveSettings()">
+                            <input type="date" id="calcStart" onchange="saveSettings(); highlightMonthBtn();">
                         </div>
                         <div class="input-group">
                             <label>정산 종료일</label>
-                            <input type="date" id="calcEnd" onchange="saveSettings()">
+                            <input type="date" id="calcEnd" onchange="saveSettings(); highlightMonthBtn();">
                         </div>
                         <div class="input-group">
                             <label>주휴 기산 요일</label>
@@ -386,20 +392,19 @@
             const name = ownerName.trim() || '익명';
             localStorage.setItem('gs25_owner_name', name);
             const lock = { owner: name, deviceId: myDeviceId, lockedAt: Date.now(), expires: Date.now() + 30 * 60 * 1000 };
+            // 로컬 즉시 반영 (Firebase onValue 지연 대기 없이)
+            currentLock = lock; isMyLock = true; updateLockUI();
             if (window._fbLockSet && window._fbLockRef) {
                 window._fbLockSet(window._fbLockRef, lock);
-            } else {
-                currentLock = lock; isMyLock = true; updateLockUI();
             }
         }
 
         function releaseEditLock() {
             if (!isMyLock) return;
             saveDB();
+            currentLock = null; isMyLock = false; updateLockUI();
             if (window._fbLockSet && window._fbLockRef) {
                 window._fbLockSet(window._fbLockRef, null);
-            } else {
-                currentLock = null; isMyLock = false; updateLockUI();
             }
         }
 
@@ -472,6 +477,28 @@
         }
 
         // 설정(날짜) 저장 로직
+        function setMonth(m) {
+            const now = new Date();
+            // 현재 월보다 미래 월이면 전년도로
+            const year = (m > now.getMonth() + 1) ? now.getFullYear() - 1 : now.getFullYear();
+            const first = new Date(year, m - 1, 1);
+            const last  = new Date(year, m, 0); // 해당 월 말일
+            document.getElementById('calcStart').value = formatDate(first);
+            document.getElementById('calcEnd').value   = formatDate(last);
+            saveSettings();
+            highlightMonthBtn(m);
+        }
+
+        function highlightMonthBtn(activeM) {
+            for (let i = 1; i <= 12; i++) {
+                const btn = document.getElementById('monthBtn' + i);
+                if (!btn) continue;
+                btn.style.background = (i === activeM) ? '#1565c0' : '#e3f2fd';
+                btn.style.color      = (i === activeM) ? '#fff'     : '#1565c0';
+                btn.style.border     = (i === activeM) ? '2px solid #0d47a1' : '1px solid #90caf9';
+            }
+        }
+
         function saveSettings() {
             db.settings.calcStart = document.getElementById('calcStart').value;
             db.settings.calcEnd = document.getElementById('calcEnd').value;
