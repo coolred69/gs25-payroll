@@ -717,7 +717,13 @@
                 let d = new Date(currentWeekStart); d.setDate(d.getDate() + i); weekDates.push(formatDate(d));
                 header.innerHTML += `<th>${daysMap[i]}<br><span style="font-size:10px;color:#777;">${d.getDate()}일</span></th>`;
             }
-            document.getElementById('weekLabel').innerText = `${weekDates[0]} ~ ${weekDates[6]}`;
+            // 주차 계산 (시작일 월요일 기준)
+            const wStart = new Date(weekDates[0]);
+            const wMonth = wStart.getMonth() + 1;
+            const firstOfMonth = new Date(wStart.getFullYear(), wStart.getMonth(), 1);
+            const weekNum = Math.ceil((wStart.getDate() + firstOfMonth.getDay()) / 7);
+            const weekLabel = `${wMonth}월 ${weekNum}째주`;
+            document.getElementById('weekLabel').innerHTML = `<span style="font-size:13px;font-weight:bold;color:#00529b;margin-right:6px;">${weekLabel}</span><span style="font-size:12px;color:#888;">${weekDates[0]} ~ ${weekDates[6]}</span>`;
             const tbody = document.getElementById('timetableBody'); tbody.innerHTML = '';
             for (let h = 0; h < 24; h++) {
                 let tr = document.createElement('tr'); let th = document.createElement('th'); 
