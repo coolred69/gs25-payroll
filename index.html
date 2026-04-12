@@ -386,6 +386,18 @@
         let isMyLock = false;
         let currentLock = null; // { owner, deviceId, lockedAt, expires }
 
+        // module script → 일반 script 변수 업데이트 브릿지
+        window.onLockChange = function(lock) {
+            if (lock && Date.now() >= lock.expires) {
+                // 만료된 잠금 자동 클리어
+                if (window._fbLockSet && window._fbLockRef) window._fbLockSet(window._fbLockRef, null);
+                lock = null;
+            }
+            currentLock = lock;
+            isMyLock = !!(lock && lock.deviceId === myDeviceId && Date.now() < lock.expires);
+            updateLockUI();
+        };
+
         function _lockGuard() {
             if (!isMyLock) {
                 alert('✏️ 먼저 [수정할꺼야!] 버튼을 누르세요.');
@@ -1469,18 +1481,10 @@
     window._fbLockSet = set;
     window._fbLockTransaction = runTransaction;
 
-    // 잠금 상태 실시간 감지
+    // 잠금 상태 실시간 감지 — 일반 script의 변수는 window.onLockChange 경유로만 변경
     onValue(lockRef, (snapshot) => {
         const lock = snapshot.val();
-        // 만료된 잠금이면 자동 클리어
-        if (lock && Date.now() >= lock.expires) {
-            set(lockRef, null);
-            window.currentLock = null;
-        } else {
-            window.currentLock = lock;
-        }
-        window.isMyLock = !!(lock && lock.deviceId === window.myDeviceId && Date.now() < lock.expires);
-        if (typeof window.updateLockUI === 'function') window.updateLockUI();
+        if (typeof window.onLockChange === 'function') window.onLockChange(lock);
     });
 
     // 실시간 리스너: Firebase → 로컬 동기화
