@@ -408,17 +408,22 @@
             if (window._fbLockTransaction && window._fbLockRef) {
                 // ★ 서버 원자적 처리 — Race Condition 방지
                 window._fbLockTransaction(window._fbLockRef, (current) => {
-                    // 서버 현재값 기준 재확인
-                    if (current && current.deviceId !== myDeviceId && Date.now() < current.expires) {
-                        return; // abort → 다른 기기가 선점
+                    // 유효한 lock이 이미 존재하면 무조건 abort (내 기기 포함 — 중복 방지)
+                    if (current && Date.now() < current.expires) {
+                        return; // abort
                     }
-                    return lock; // 잠금 획득
-                }).then((result) => {
+                    return lock; // 없거나 만료 → 획득
+                }, { applyLocally: false }).then((result) => {
                     if (result.committed) {
                         currentLock = lock; isMyLock = true; updateLockUI();
                     } else {
                         const c = result.snapshot.val();
-                        alert(`🔒 ${c ? c.owner : '다른 기기'}가 방금 먼저 수정을 시작했습니다.`);
+                        if (c && c.deviceId === myDeviceId) {
+                            // 내가 이미 lock 보유
+                            currentLock = c; isMyLock = true; updateLockUI();
+                        } else {
+                            alert(`🔒 ${c ? c.owner + '가' : '다른 기기가'} 이미 수정 중입니다.\n잠금 해제 후 다시 시도하세요.`);
+                        }
                     }
                 }).catch(() => {
                     // 오프라인 등 오류 시 로컬만 처리
