@@ -552,7 +552,8 @@
         function getBaseName(name) { return name.split('_')[0].trim(); }
 
         function addOrUpdateWorker() {
-            if (!_lockGuard()) return;
+            // 신규 추가는 잠금 필요, 편집 모드는 loadForEdit에서 이미 검증
+            if (!editingWorkerId && !_lockGuard()) return;
             const name = document.getElementById('wName').value.trim();
             const wageRaw = parseInt(document.getElementById('wWage').value);
             const taxVal = document.getElementById('wTax').value;
@@ -581,7 +582,8 @@
         }
 
         function loadForEdit(id, event) {
-            event.stopPropagation(); 
+            event.stopPropagation();
+            if (!_lockGuard()) return;
             const w = db.workers.find(x => x.id === id);
             if (!w) return;
             document.getElementById('wName').value = w.name; document.getElementById('wWage').value = w.wage;
@@ -974,15 +976,32 @@
 
         // 카카오톡 복사 기능 로직
         function copyToKakao() {
-            if(!currentKakaoText) return alert("먼저 급여 산출을 진행하십시오.");
-            
-            // Clipboard API (모바일/PC 지원)
-            navigator.clipboard.writeText(currentKakaoText).then(() => {
+            if(!currentCalcSnapshot || !currentCalcSnapshot.list || currentCalcSnapshot.list.length === 0)
+                return alert("먼저 급여 산출을 진행하십시오.");
+
+            // 복사 시점에 manualPayMap 반영해 재조립
+            let txt = `[GS25 평택점 급여 정산 내역]\n▪ 정산 기간: ${currentCalcSnapshot.startStr} ~ ${currentCalcSnapshot.endStr}\n\n`;
+            let adjustedTotal = 0;
+            currentCalcSnapshot.list.forEach(r => {
+                const calcNet = Math.floor(r.netPay);
+                const actual = manualPayMap[r.baseName] !== undefined ? manualPayMap[r.baseName] : calcNet;
+                adjustedTotal += actual;
+                const diff = actual - calcNet;
+                const diffStr = diff === 0 ? '' : (diff > 0 ? ` (+${diff.toLocaleString()}원)` : ` (${diff.toLocaleString()}원)`);
+                txt += `👤 ${r.baseName}\n- 총 근로시간: ${r.totalHours}시간\n`;
+                if (manualPayMap[r.baseName] !== undefined) {
+                    txt += `- 정산액: ${calcNet.toLocaleString()}원 → 실지급: ${actual.toLocaleString()}원${diffStr}\n\n`;
+                } else {
+                    txt += `- 실수령액: ${actual.toLocaleString()}원\n\n`;
+                }
+            });
+            txt += `💰 점포 총 인건비 지출액: ${adjustedTotal.toLocaleString()}원\n`;
+
+            navigator.clipboard.writeText(txt).then(() => {
                 alert("✅ 정산 요약본이 복사되었습니다.\n동업 대표님과의 카카오톡 채팅창에 '붙여넣기' 하세요.");
             }).catch(err => {
-                // Clipboard API 지원하지 않는 브라우저 대응 우회 로직
                 const textArea = document.createElement("textarea");
-                textArea.value = currentKakaoText;
+                textArea.value = txt;
                 document.body.appendChild(textArea);
                 textArea.select();
                 try {
