@@ -389,11 +389,11 @@
         // module script → 일반 script 변수 업데이트 브릿지
         window.onLockChange = function(lock) {
             if (lock && Date.now() >= lock.expires) {
-                // 만료된 잠금 자동 클리어
                 if (window._fbLockSet && window._fbLockRef) window._fbLockSet(window._fbLockRef, null);
                 lock = null;
             }
             currentLock = lock;
+            window._currentLock = lock; // module에서 접근용
             isMyLock = !!(lock && lock.deviceId === myDeviceId && Date.now() < lock.expires);
             updateLockUI();
         };
@@ -1413,7 +1413,7 @@
     <!-- Firebase SDK (Realtime Database) -->
     <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-    import { getDatabase, ref, set, get, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+    import { getDatabase, ref, set, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
     const firebaseConfig = {
         apiKey: "AIzaSyAkG-AxbwFt9MUlP9E3alAbIjN9-HHkWE8",
         authDomain: "gs25-payroll.firebaseapp.com",
@@ -1438,26 +1438,26 @@
         if (typeof window.onLockChange === 'function') window.onLockChange(lock);
     });
 
-    // 수정할꺼야! — get으로 현재 lock 확인 후 set
+    // 수정할꺼야! — onValue로 이미 받은 _currentLock 사용 (get() 불필요)
     window._doRequestLock = async function() {
+        const myId = window.myDeviceId;
+        const current = window._currentLock;
+        if (current && Date.now() < current.expires && current.deviceId !== myId) {
+            alert(`🔒 ${current.owner}가 수정 중입니다.\n${Math.ceil((current.expires - Date.now()) / 60000)}분 후 만료됩니다.`);
+            return;
+        }
         const savedName = localStorage.getItem('gs25_owner_name') || '';
         const ownerName = prompt('수정자 이름을 입력하세요', savedName);
         if (ownerName === null) return;
         const name = ownerName.trim() || '익명';
         localStorage.setItem('gs25_owner_name', name);
+        const lock = { owner: name, deviceId: myId, lockedAt: Date.now(), expires: Date.now() + 30 * 60 * 1000 };
         try {
-            const snapshot = await get(lockRef);
-            const current = snapshot.val();
-            const myId = window.myDeviceId;
-            if (current && Date.now() < current.expires && current.deviceId !== myId) {
-                alert(`🔒 ${current.owner}가 수정 중입니다.\n${Math.ceil((current.expires - Date.now()) / 60000)}분 후 만료됩니다.`);
-                return;
-            }
-            const lock = { owner: name, deviceId: myId, lockedAt: Date.now(), expires: Date.now() + 30 * 60 * 1000 };
             await set(lockRef, lock);
-            // onValue가 자동 트리거 → onLockChange 호출됨
+            // onValue 자동 트리거 → onLockChange 호출됨
         } catch(e) {
-            alert('잠금 오류: 네트워크 상태를 확인하세요.');
+            // 오프라인 시 로컬만 처리
+            if (typeof window.onLockChange === 'function') window.onLockChange(lock);
         }
     };
 
