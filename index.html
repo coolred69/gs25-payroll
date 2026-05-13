@@ -581,6 +581,14 @@
             return `${y}-${m}-${d}`;
         }
 
+        // 주차 키 → "MM-DD~MM-DD" 범위 문자열 (전역)
+        function wkLabel(wk) {
+            let s = new Date(wk);
+            let e = new Date(wk); e.setDate(e.getDate() + 6);
+            let fmt = d => (d.getMonth()+1+'').padStart(2,'0') + '-' + (d.getDate()+'').padStart(2,'0');
+            return fmt(s) + '~' + fmt(e);
+        }
+
         function getBaseName(name) { return name.split('_')[0].trim(); }
 
         function addOrUpdateWorker() {
@@ -805,14 +813,6 @@
             // ★ 주휴 기산요일 (0=일, 1=월, ..., 6=토) 
             const weekStartDay = parseInt(document.getElementById('weekStartDay').value || '1');
 
-            // 주차 키 → "MM-DD~MM-DD" 범위 문자열
-            function wkLabel(wk) {
-                let s = new Date(wk);
-                let e = new Date(wk); e.setDate(e.getDate() + 6);
-                let fmt = d => (d.getMonth()+1+'').padStart(2,'0') + '-' + (d.getDate()+'').padStart(2,'0');
-                return fmt(s) + '~' + fmt(e);
-            }
-
             // 날짜 → 해당 주의 기산요일(월요일 또는 설정값) 기준 주차 키 반환
             function getWeekKey(date) {
                 let d = new Date(date);
@@ -955,6 +955,9 @@
                 // 수식 HTML 생성
                 let formulaHtml = buildFormulaHtml(r, avgWage, extraPay, taxAmount, netPay, grossPay);
 
+                let carriedHtml = '';
+                { let carried = Object.keys(r.weeks).filter(wk=>{ let e=new Date(wk); e.setDate(e.getDate()+6); return e>payEnd && r.weeks[wk].hours>=15; }); if(carried.length) carriedHtml = `<div style="color:#e65100;font-size:10px;margin-top:2px;">⚠ ${carried.map(wkLabel).join(', ')} → 다음달 이월</div>`; }
+
                 tbody.innerHTML += `
                     <tr>
                         <td>
@@ -969,10 +972,7 @@
                             ${Object.keys(r.weeklyJuhyu).sort().map(wk => {
                                 return `<div style="color:#283593;">· ${wkLabel(wk)} (${r.weeklyJuhyu[wk].hours}H): <b>${Math.floor(r.weeklyJuhyu[wk].amount).toLocaleString()}원</b></div>`;
                             }).join('')}
-                            ${(() => {
-                                let carried = Object.keys(r.weeks).filter(wk=>{ let e=new Date(wk); e.setDate(e.getDate()+6); return e>payEnd && r.weeks[wk].hours>=15; });
-                                return carried.length ? `<div style="color:#e65100;font-size:10px;margin-top:2px;">⚠ ${carried.map(wkLabel).join(', ')} → 다음달 이월</div>` : '';
-                            })()}
+                            ${carriedHtml}
                             <div style="margin-top:2px;color:#777;">가산: ${Math.floor(extraPay).toLocaleString()}원</div>
                         </td>
                         <td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br><strong>-${taxAmount.toLocaleString()}원</strong></td>
@@ -1087,9 +1087,6 @@
                 let d = r.weeklyJuhyu[wk];
                 juhyuLines += `  · ${wkLabel(wk)} (${d.hours}H): ${Math.floor(d.amount).toLocaleString()}원\n`;
             });
-            // 이월 주차 안내
-            let carriedWks = Object.keys(r.weeks).filter(wk=>{ let e=new Date(wk); e.setDate(e.getDate()+6); return e>payEnd && r.weeks[wk].hours>=15; });
-            if (carriedWks.length) juhyuLines += `  ⚠ ${carriedWks.map(wkLabel).join(', ')} → 다음달 이월\n`;
 
             const taxLabel = r.taxType === 'family' ? '가족(무공제)' : (r.taxRate == 0.094 ? '4대보험 9.4%' : (r.taxRate == 0.033 ? '프리랜서 3.3%' : '무공제'));
 
