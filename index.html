@@ -96,8 +96,9 @@
         @keyframes blink { 50% { opacity: 0.7; } }
 
         .result-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; table-layout: fixed; min-width: 780px; }
-        .result-table th, .result-table td { border: 1px solid #dee2e6; padding: 8px 6px; text-align: center; vertical-align: middle; word-break: keep-all; overflow-wrap: break-word; }
-        .result-table th { background: #f8f9fa; color: #00529b; font-size: 11px; line-height: 1.5; }
+        .result-table th, .result-table td { border: 1px solid #dee2e6; padding: 8px 6px; text-align: center; vertical-align: middle; }
+        .result-table th { background: #f8f9fa; color: #00529b; font-size: 11px; line-height: 1.5; word-break: keep-all; }
+        .result-table td { word-break: keep-all; overflow-wrap: break-word; }
         .result-table .col-name  { width: 11%; }
         .result-table .col-hours { width: 13%; }
         .result-table .col-base  { width: 11%; }
@@ -302,10 +303,10 @@
                                 <thead>
                                     <tr>
                                         <th>통합 이름</th>
-                                        <th>총 근로 시간 (시급 분리)</th>
+                                        <th>총 근로 시간<br>(시급 분리)</th>
                                         <th>합산 기본급</th>
                                         <th>주휴/가산수당</th>
-                                        <th>공제내역 (세금)</th>
+                                        <th>공제내역<br>(세금)</th>
                                         <th>세후 실수령액</th>
                                     </tr>
                                 </thead>
