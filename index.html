@@ -95,16 +95,16 @@
         .dual-cell .slot { flex:1; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:bold; color:white; border-radius:2px; min-height:0; }
         @keyframes blink { 50% { opacity: 0.7; } }
 
-        .result-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; table-layout: fixed; min-width: 780px; }
-        .result-table th, .result-table td { border: 1px solid #dee2e6; padding: 8px 6px; text-align: center; vertical-align: middle; }
+        .result-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; table-layout: fixed; min-width: 780px; }
+        .result-table th, .result-table td { border: 1px solid #dee2e6; padding: 7px 5px; text-align: center; vertical-align: middle; }
         .result-table th { background: #f8f9fa; color: #00529b; font-size: 11px; line-height: 1.5; word-break: keep-all; }
         .result-table td { word-break: keep-all; overflow-wrap: break-word; }
-        .result-table .col-name  { width: 11%; }
-        .result-table .col-hours { width: 13%; }
-        .result-table .col-base  { width: 11%; }
-        .result-table .col-juhyu { width: 28%; }
-        .result-table .col-tax   { width: 13%; }
-        .result-table .col-net   { width: 24%; }
+        .result-table .col-name  { width: 10%; }
+        .result-table .col-hours { width: 12%; }
+        .result-table .col-base  { width: 10%; }
+        .result-table .col-juhyu { width: 27%; }
+        .result-table .col-tax   { width: 10%; }
+        .result-table .col-net   { width: 31%; }
         .juhyu-line { white-space: nowrap; font-size: 10px; color: #283593; text-align: left; line-height: 1.6; }
         .total-amount { font-size: 22px; font-weight: bold; color: #d32f2f; text-align: right; margin-top: 10px; }
 
@@ -977,20 +977,20 @@
                             <span style="font-size:10px;color:#777;">(평균시급: ${Math.floor(avgWage).toLocaleString()}원)</span><br>
                             <button onclick="toggleFormula('${formulaId}')" style="margin-top:4px;font-size:11px;padding:3px 8px;background:#e3f2fd;border:1px solid #90caf9;border-radius:4px;cursor:pointer;color:#1565c0;">📐 수식 보기</button>
                         </td>
-                        <td><div style="font-size:14px; font-weight:bold;">${r.totalHours} 시간</div>${breakdownStr}</td>
-                        <td>${Math.floor(r.totalBasePay).toLocaleString()}원</td>
+                        <td><div style="font-size:13px; font-weight:bold;">${r.totalHours} 시간</div>${breakdownStr}</td>
+                        <td style="font-size:12px;">${Math.floor(r.totalBasePay).toLocaleString()}원</td>
                         <td style="font-size:11px; color:#555;">
-                            <div style="font-weight:bold;color:#1a237e;margin-bottom:2px;">주휴합계: ${Math.floor(r.juhyuPay).toLocaleString()}원</div>
+                            <div style="font-weight:bold;color:#1a237e;font-size:11px;margin-bottom:2px;">주휴합계: ${Math.floor(r.juhyuPay).toLocaleString()}원</div>
                             ${Object.keys(r.weeklyJuhyu).sort().map(wk => {
                                 return `<div class="juhyu-line">· ${wkLabel(wk)} (${r.weeklyJuhyu[wk].hours}H): <b>${Math.floor(r.weeklyJuhyu[wk].amount).toLocaleString()}원</b></div>`;
                             }).join('')}
                             ${carriedHtml}
-                            <div style="margin-top:2px;color:#777;">가산: ${Math.floor(extraPay).toLocaleString()}원</div>
+                            <div style="margin-top:2px;color:#777;font-size:10px;">가산: ${Math.floor(extraPay).toLocaleString()}원</div>
                         </td>
                         <td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br><strong>-${taxAmount.toLocaleString()}원</strong></td>
-                        <td style="color:#00529b; font-weight:bold; font-size:15px;">
+                        <td style="color:#00529b; font-weight:bold; font-size:14px;">
                             <div style="margin-bottom:4px;">${Math.floor(netPay).toLocaleString()}원</div>
-                            ${(()=>{ const wk=db.workers.find(x=>getBaseName(x.name)===r.baseName); return (wk&&wk.account)?`<div style="font-size:11px;color:#555;font-weight:normal;background:#f5f5f5;border-radius:4px;padding:3px 6px;margin-bottom:5px;">🏦 ${wk.account}</div>`:''; })()}
+                            ${(()=>{ const wk=db.workers.find(x=>getBaseName(x.name)===r.baseName); return (wk&&wk.account)?`<div style="font-size:10px;color:#555;font-weight:normal;background:#f5f5f5;border-radius:4px;padding:2px 5px;margin-bottom:4px;">🏦 ${wk.account}</div>`:''; })()}
                             <div style="font-size:10px;color:#888;margin-bottom:3px;">
                                 <label style="cursor:pointer;margin-right:6px;">
                                     <input type="radio" name="mode_${r.baseName}" value="actual" checked onchange="switchMode(this,'${r.baseName}',${Math.floor(netPay)})"> 실지급 입력
@@ -1003,10 +1003,10 @@
                                 data-name="${r.baseName}"
                                 data-calc="${Math.floor(netPay)}"
                                 data-mode="actual"
-                                style="width:120px;padding:4px 6px;font-size:12px;border:1px solid #90caf9;border-radius:4px;color:#1a237e;text-align:right;"
+                                style="width:110px;padding:3px 5px;font-size:11px;border:1px solid #90caf9;border-radius:4px;color:#1a237e;text-align:right;"
                                 oninput="updateManualPay(this)">
                             <div class="manual-net" data-name="${r.baseName}" style="font-size:11px;margin-top:3px;display:none;"></div>
-                            <button onclick="copyEmployeeMsg('${r.baseName}')" style="margin-top:8px;width:100%;font-size:11px;padding:5px 0;background:#e8f5e9;border:1px solid #66bb6a;border-radius:4px;cursor:pointer;color:#2e7d32;font-weight:bold;">📱 개인 메시지 복사</button>
+                            <button onclick="copyEmployeeMsg('${r.baseName}')" style="margin-top:6px;width:100%;font-size:11px;padding:4px 0;background:#e8f5e9;border:1px solid #66bb6a;border-radius:4px;cursor:pointer;color:#2e7d32;font-weight:bold;">📱 개인 메시지 복사</button>
                         </td>
                     </tr>
                     <tr id="${formulaId}" style="display:none;">
