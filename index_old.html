@@ -110,6 +110,11 @@
         .history-card { background: #fff; border: 1px solid #dee2e6; padding: 15px; border-radius: 6px; cursor: pointer; transition: all 0.2s; border-left: 4px solid #00529b; display: flex; justify-content: space-between; align-items: center; }
         .history-card:hover { background: #f1f8ff; border-color: #00529b; }
         .history-card.active { background: #e3f2fd; border-color: #00529b; }
+        .history-action-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+        .hist-img-btn { flex: 1; min-width: 130px; padding: 9px 12px; background: #6f42c1; color: #fff; border: none; border-radius: 5px; font-size: 13px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .hist-img-btn:hover { background: #5a32a3; }
+        .hist-excel-btn { flex: 1; min-width: 130px; padding: 9px 12px; background: #217346; color: #fff; border: none; border-radius: 5px; font-size: 13px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .hist-excel-btn:hover { background: #185c38; }
         .history-info h4 { margin: 0 0 5px 0; color: #333; font-size: 15px; }
         .history-info p { margin: 0; font-size: 12px; color: #777; }
         
@@ -717,13 +722,7 @@
                 let d = new Date(currentWeekStart); d.setDate(d.getDate() + i); weekDates.push(formatDate(d));
                 header.innerHTML += `<th>${daysMap[i]}<br><span style="font-size:10px;color:#777;">${d.getDate()}일</span></th>`;
             }
-            // 주차 계산 (시작일 월요일 기준)
-            const wStart = new Date(weekDates[0]);
-            const wMonth = wStart.getMonth() + 1;
-            const firstOfMonth = new Date(wStart.getFullYear(), wStart.getMonth(), 1);
-            const weekNum = Math.ceil((wStart.getDate() + firstOfMonth.getDay()) / 7);
-            const weekLabel = `${wMonth}월 ${weekNum}째주`;
-            document.getElementById('weekLabel').innerHTML = `<span style="font-size:13px;font-weight:bold;color:#00529b;margin-right:6px;">${weekLabel}</span><span style="font-size:12px;color:#888;">${weekDates[0]} ~ ${weekDates[6]}</span>`;
+            document.getElementById('weekLabel').innerText = `${weekDates[0]} ~ ${weekDates[6]}`;
             const tbody = document.getElementById('timetableBody'); tbody.innerHTML = '';
             for (let h = 0; h < 24; h++) {
                 let tr = document.createElement('tr'); let th = document.createElement('th'); 
@@ -1300,7 +1299,11 @@
         function renderHistoryDetail(id) {
             document.querySelectorAll('.history-card').forEach(c => c.classList.remove('active')); try { event.currentTarget.classList.add('active'); } catch(e) {}
             const record = db.settlements.find(s => s.id === id); if(!record) return;
-            let html = `<h3 style="margin-top:0; color:#333; font-size:18px;">${record.title}</h3><div style="font-size:13px; color:#555; margin-bottom:15px;">기간: ${record.data.startStr} ~ ${record.data.endStr}<br>저장: ${record.timestamp}</div><div style="overflow-x:auto;"><table class="result-table"><thead><tr><th>이름</th><th>총 시간</th><th>기본급</th><th>수당</th><th>세금</th><th>실수령액</th></tr></thead><tbody>`;
+            let html = `<div class="history-action-bar">
+                <button class="hist-img-btn" onclick="copyHistoryImage('${id}')">📷 이미지 복사</button>
+                <button class="hist-excel-btn" onclick="downloadHistoryExcel('${id}')">📊 엑셀 다운로드</button>
+            </div>`;
+            html += `<h3 style="margin-top:0; color:#333; font-size:18px;">${record.title}</h3><div style="font-size:13px; color:#555; margin-bottom:15px;">기간: ${record.data.startStr} ~ ${record.data.endStr}<br>저장: ${record.timestamp}</div><div style="overflow-x:auto;"><table class="result-table"><thead><tr><th>이름</th><th>총 시간</th><th>기본급</th><th>수당</th><th>세금</th><th>실수령액</th></tr></thead><tbody>`;
             record.data.list.forEach(r => {
                 let taxTypeStr = r.taxType === 'family' ? '가족' : (r.taxRate == 0.094 ? '4대' : (r.taxRate == 0.033 ? '3.3%' : '무공제'));
                 let calcNet = Math.floor(r.netPay);
@@ -1366,6 +1369,68 @@
             event.stopPropagation(); if(!confirm("이 기록을 영구 삭제하시겠습니까?")) return;
             db.settlements = db.settlements.filter(s => s.id !== id); saveDB(); renderHistoryList();
             document.getElementById('historyDetailArea').innerHTML = '좌측에서 내역을 선택하십시오.';
+        }
+
+        async function copyHistoryImage(id) {
+            const area = document.getElementById('historyDetailArea');
+            const btns = area.querySelector('.history-action-bar');
+            if (btns) btns.style.display = 'none';
+            try {
+                const canvas = await html2canvas(area, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+                if (btns) btns.style.display = '';
+                canvas.toBlob(async blob => {
+                    try {
+                        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+                        alert('✅ 이미지가 클립보드에 복사되었습니다!\n카카오톡 등에 바로 붙여넣기 하세요.');
+                    } catch(e) {
+                        // 클립보드 실패 시 파일 다운로드로 폴백
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        const rec = db.settlements.find(s => s.id === id);
+                        a.download = (rec ? rec.title : '정산내역') + '.png';
+                        a.click();
+                        alert('⚠️ 클립보드 복사 불가 → 이미지 파일로 저장되었습니다.');
+                    }
+                }, 'image/png');
+            } catch(e) {
+                if (btns) btns.style.display = '';
+                alert('❌ 이미지 생성 실패: ' + e.message);
+            }
+        }
+
+        function downloadHistoryExcel(id) {
+            const record = db.settlements.find(s => s.id === id); if(!record) return;
+            const wb = XLSX.utils.book_new();
+            const rows = [];
+            // 헤더 정보
+            rows.push([record.title]);
+            rows.push(['기간:', record.data.startStr + ' ~ ' + record.data.endStr]);
+            rows.push(['저장일시:', record.timestamp]);
+            rows.push([]);
+            rows.push(['이름', '총시간(H)', '기본급', '주휴수당', '가산수당', '세금유형', '세금(공제)', '실수령액', '비고']);
+            // 데이터 행
+            record.data.list.forEach(r => {
+                const taxTypeStr = r.taxType === 'family' ? '가족(무공제)' : (r.taxRate == 0.094 ? '4대보험' : (r.taxRate == 0.033 ? '3.3%프리랜서' : '무공제'));
+                const calcNet = Math.floor(r.netPay);
+                const actualNet = (record.manualPay && record.manualPay[r.baseName] !== undefined) ? record.manualPay[r.baseName] : calcNet;
+                const note = (record.manualPay && record.manualPay[r.baseName] !== undefined && actualNet !== calcNet) ? '수기지급' : '';
+                rows.push([r.baseName, r.totalHours, Math.floor(r.totalBasePay), Math.floor(r.juhyuPay), Math.floor(r.extraPay), taxTypeStr, r.taxAmount, actualNet, note]);
+            });
+            // 합계
+            rows.push([]);
+            const dispTotal = record.adjustedTotal !== undefined ? record.adjustedTotal : Math.floor(record.data.storeTotal);
+            rows.push(['실지급 총액', '', '', '', '', '', '', dispTotal, '']);
+            // 특이사항
+            if (record.note) { rows.push([]); rows.push(['특이사항:', record.note]); }
+
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            // 열 너비
+            ws['!cols'] = [{wch:14},{wch:10},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:10}];
+            // 제목 병합
+            ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:8} }];
+            XLSX.utils.book_append_sheet(wb, ws, '정산내역');
+            const filename = record.title.replace(/[\/\\:*?"<>|]/g,'_') + '.xlsx';
+            XLSX.writeFile(wb, filename);
         }
 
         function getLifetimeAutoStats(baseName) {
@@ -1539,6 +1604,10 @@
     window.addEventListener('online',  () => { if(typeof setSyncStatus==='function') setSyncStatus('synced','✅ 온라인 복구'); });
     setTimeout(() => { if(typeof setSyncStatus==='function') setSyncStatus('syncing','☁️ 연결 중...'); }, 100);
     </script>
+
+    <!-- html2canvas + SheetJS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 </body>
 </html>

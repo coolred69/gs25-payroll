@@ -805,6 +805,14 @@
             // ★ 주휴 기산요일 (0=일, 1=월, ..., 6=토) 
             const weekStartDay = parseInt(document.getElementById('weekStartDay').value || '1');
 
+            // 주차 키 → "MM-DD~MM-DD" 범위 문자열
+            function wkLabel(wk) {
+                let s = new Date(wk);
+                let e = new Date(wk); e.setDate(e.getDate() + 6);
+                let fmt = d => (d.getMonth()+1+'').padStart(2,'0') + '-' + (d.getDate()+'').padStart(2,'0');
+                return fmt(s) + '~' + fmt(e);
+            }
+
             // 날짜 → 해당 주의 기산요일(월요일 또는 설정값) 기준 주차 키 반환
             function getWeekKey(date) {
                 let d = new Date(date);
@@ -959,10 +967,12 @@
                         <td style="font-size:11px; color:#555;">
                             <div style="font-weight:bold;color:#1a237e;margin-bottom:2px;">주휴합계: ${Math.floor(r.juhyuPay).toLocaleString()}원</div>
                             ${Object.keys(r.weeklyJuhyu).sort().map(wk => {
-                                let wkEnd = new Date(wk); wkEnd.setDate(wkEnd.getDate()+6);
-                                return `<div style="color:#283593;">· ${wk} 주(${r.weeklyJuhyu[wk].hours}H): <b>${Math.floor(r.weeklyJuhyu[wk].amount).toLocaleString()}원</b></div>`;
+                                return `<div style="color:#283593;">· ${wkLabel(wk)} (${r.weeklyJuhyu[wk].hours}H): <b>${Math.floor(r.weeklyJuhyu[wk].amount).toLocaleString()}원</b></div>`;
                             }).join('')}
-                            ${Object.keys(r.weeks).some(wk=>{ let e=new Date(wk); e.setDate(e.getDate()+6); return e>payEnd; }) ? '<div style="color:#e65100;font-size:10px;margin-top:2px;">⚠ 마지막 주 이월→다음달</div>' : ''}
+                            ${(() => {
+                                let carried = Object.keys(r.weeks).filter(wk=>{ let e=new Date(wk); e.setDate(e.getDate()+6); return e>payEnd && r.weeks[wk].hours>=15; });
+                                return carried.length ? `<div style="color:#e65100;font-size:10px;margin-top:2px;">⚠ ${carried.map(wkLabel).join(', ')} → 다음달 이월</div>` : '';
+                            })()}
                             <div style="margin-top:2px;color:#777;">가산: ${Math.floor(extraPay).toLocaleString()}원</div>
                         </td>
                         <td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br><strong>-${taxAmount.toLocaleString()}원</strong></td>
@@ -1075,8 +1085,11 @@
             let juhyuLines = '';
             Object.keys(r.weeklyJuhyu).sort().forEach(wk => {
                 let d = r.weeklyJuhyu[wk];
-                juhyuLines += `  · ${wk} 주 (${d.hours}H): ${Math.floor(d.amount).toLocaleString()}원\n`;
+                juhyuLines += `  · ${wkLabel(wk)} (${d.hours}H): ${Math.floor(d.amount).toLocaleString()}원\n`;
             });
+            // 이월 주차 안내
+            let carriedWks = Object.keys(r.weeks).filter(wk=>{ let e=new Date(wk); e.setDate(e.getDate()+6); return e>payEnd && r.weeks[wk].hours>=15; });
+            if (carriedWks.length) juhyuLines += `  ⚠ ${carriedWks.map(wkLabel).join(', ')} → 다음달 이월\n`;
 
             const taxLabel = r.taxType === 'family' ? '가족(무공제)' : (r.taxRate == 0.094 ? '4대보험 9.4%' : (r.taxRate == 0.033 ? '프리랜서 3.3%' : '무공제'));
 
@@ -1145,7 +1158,7 @@
                     let wd = r.weeklyJuhyu[wk];
                     let weekAvg = Math.floor(wd.amount / ((Math.min(wd.hours,40)/40)*8));
                     let hrs = Math.min(wd.hours, 40);
-                    html += '<div style="margin-left:12px;">' + wk + ' 주: (' + hrs + 'H ÷ 40) × 8 × ' + weekAvg.toLocaleString() + '원 = <b style="color:#1a237e;">' + Math.floor(wd.amount).toLocaleString() + '원</b></div>';
+                    html += '<div style="margin-left:12px;">' + wkLabel(wk) + ': (' + hrs + 'H ÷ 40) × 8 × ' + weekAvg.toLocaleString() + '원 = <b style="color:#1a237e;">' + Math.floor(wd.amount).toLocaleString() + '원</b></div>';
                 });
                 html += '<div style="margin-left:12px;">주휴 합계 = <b style="color:#1a237e;">' + Math.floor(r.juhyuPay).toLocaleString() + '원</b></div>';
             }
