@@ -105,7 +105,10 @@
         .result-table .col-juhyu { width: 30%; }
         .result-table .col-tax   { width: 10%; }
         .result-table .col-net   { width: 28%; }
-        .juhyu-line { white-space: nowrap; font-size: 10.5px; color: #283593; text-align: left; line-height: 1.7; display: inline-block; }
+        .juhyu-cell { text-align: left; padding-left: 10px; }
+        .juhyu-total { font-weight: bold; color: #1a237e; font-size: 11px; margin-bottom: 3px; }
+        .juhyu-line { white-space: nowrap; font-size: 10.5px; color: #283593; line-height: 1.7; }
+        .juhyu-extra { margin-top: 2px; color: #777; font-size: 10px; }
         .total-amount { font-size: 22px; font-weight: bold; color: #d32f2f; text-align: right; margin-top: 10px; }
 
         .dashboard-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 800px; }
@@ -979,15 +982,13 @@
                         </td>
                         <td><div style="font-size:13px; font-weight:bold;">${r.totalHours} 시간</div>${breakdownStr}</td>
                         <td style="font-size:12px;">${Math.floor(r.totalBasePay).toLocaleString()}원</td>
-                        <td style="font-size:11px; color:#555;">
-                            <div style="display:inline-block; text-align:left;">
-                            <div style="font-weight:bold;color:#1a237e;font-size:11px;margin-bottom:3px;">주휴합계: ${Math.floor(r.juhyuPay).toLocaleString()}원</div>
+                        <td class="juhyu-cell">
+                            <div class="juhyu-total">주휴합계: ${Math.floor(r.juhyuPay).toLocaleString()}원</div>
                             ${Object.keys(r.weeklyJuhyu).sort().map(wk => {
                                 return `<div class="juhyu-line">· ${wkLabel(wk)} (${r.weeklyJuhyu[wk].hours}H): <b>${Math.floor(r.weeklyJuhyu[wk].amount).toLocaleString()}원</b></div>`;
                             }).join('')}
                             ${carriedHtml}
-                            <div style="margin-top:2px;color:#777;font-size:10px;">가산: ${Math.floor(extraPay).toLocaleString()}원</div>
-                            </div>
+                            <div class="juhyu-extra">가산: ${Math.floor(extraPay).toLocaleString()}원</div>
                         </td>
                         <td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br><strong>-${taxAmount.toLocaleString()}원</strong></td>
                         <td style="color:#00529b; font-weight:bold; font-size:16px;">
