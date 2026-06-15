@@ -75,6 +75,10 @@
         .btn-group-sm { display: flex; gap: 4px; }
         button.edit-btn { background: #ffc107; color: #333; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
         button.del-btn { background: #777; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        button.retire-btn { background: #ef9a9a; color: #b71c1c; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        button.reinstate-btn { background: #a5d6a7; color: #1b5e20; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold; }
+        .worker-item.retired { opacity: 0.55; background: #f5f5f5; border-left: 3px solid #bbb; cursor: default; }
+        .retire-section-title { font-size: 11px; color: #999; margin: 8px 0 4px 2px; cursor: pointer; user-select: none; }
         
         .eraser-item { background: #fff3cd; border: 1px solid #ffeeba; text-align: center; justify-content: center; color: #856404; font-weight: bold; margin-bottom: 10px; }
         .eraser-item.active { border-color: #d32f2f; background: #ffdf7e; }
@@ -122,9 +126,9 @@
         .history-card:hover { background: #f1f8ff; border-color: #00529b; }
         .history-card.active { background: #e3f2fd; border-color: #00529b; }
         .history-action-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-        .hist-img-btn { flex: 1; min-width: 130px; padding: 9px 12px; background: #6f42c1; color: #fff; border: none; border-radius: 5px; font-size: 13px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .hist-img-btn { flex: 1; min-width: 130px; padding: 9px 12px; background: #6f42c1; color: #fff; border: none; border-radius: 5px; font-size: 13px; font-weight: bold; cursor: pointer; }
         .hist-img-btn:hover { background: #5a32a3; }
-        .hist-excel-btn { flex: 1; min-width: 130px; padding: 9px 12px; background: #217346; color: #fff; border: none; border-radius: 5px; font-size: 13px; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        .hist-excel-btn { flex: 1; min-width: 130px; padding: 9px 12px; background: #217346; color: #fff; border: none; border-radius: 5px; font-size: 13px; font-weight: bold; cursor: pointer; }
         .hist-excel-btn:hover { background: #185c38; }
         .history-info h4 { margin: 0 0 5px 0; color: #333; font-size: 15px; }
         .history-info p { margin: 0; font-size: 12px; color: #777; }
@@ -596,15 +600,12 @@
             return `${y}-${m}-${d}`;
         }
 
-        // 주차 키 → "MM-DD~MM-DD" 범위 문자열 (전역)
-        function wkLabel(wk) {
-            let s = new Date(wk);
-            let e = new Date(wk); e.setDate(e.getDate() + 6);
-            let fmt = d => (d.getMonth()+1+'').padStart(2,'0') + '-' + (d.getDate()+'').padStart(2,'0');
-            return fmt(s) + '~' + fmt(e);
-        }
-
         function getBaseName(name) { return name.split('_')[0].trim(); }
+        function wkLabel(wk) {
+            let s = new Date(wk), e = new Date(wk); e.setDate(e.getDate()+6);
+            let fmt = d => (d.getMonth()+1+'').padStart(2,'0')+'-'+(d.getDate()+'').padStart(2,'0');
+            return fmt(s)+'~'+fmt(e);
+        }
 
         function addOrUpdateWorker() {
             // 신규 추가는 잠금 필요, 편집 모드는 loadForEdit에서 이미 검증
@@ -650,39 +651,58 @@
             btn.innerText = "✓ 정보 갱신 완료"; btn.classList.add('edit-mode');
         }
 
-        function selectWorker(id) { activeWorkerId = id; document.getElementById('eraserBtn').classList.remove('active'); updateWorkerList(); }
+        function selectWorker(id) {
+            const w = db.workers.find(x => x.id === id);
+            if (w && w.active === false) return;
+            activeWorkerId = id; document.getElementById('eraserBtn').classList.remove('active'); updateWorkerList();
+        }
         function selectEraser() { activeWorkerId = 'ERASER'; document.getElementById('eraserBtn').classList.add('active'); document.querySelectorAll('#workerList .worker-item').forEach(item => { item.classList.remove('active'); }); }
 
-        function deleteWorker(id, event) {
-            event.stopPropagation();
-            if (!_lockGuard()) return;
-            if(!confirm("해당 근무자와 입력된 스케줄을 삭제하시겠습니까?")) return;
-            db.workers = db.workers.filter(w => w.id !== id);
-            for (let key in db.schedule) {
-                db.schedule[key] = db.schedule[key].filter(wId => wId !== id);
-                if (db.schedule[key].length === 0) delete db.schedule[key];
-            }
+        function retireWorker(id, event) {
+            event.stopPropagation(); if (!_lockGuard()) return;
+            const w = db.workers.find(x => x.id === id); if (!w) return;
+            if (!confirm(`"${getBaseName(w.name)}" 퇴직 처리하시겠습니까?\n스케줄·급여 데이터는 보존됩니다.`)) return;
+            w.active = false;
             if (activeWorkerId === id) activeWorkerId = null;
-            if (editingWorkerId === id) {
-                editingWorkerId = null; document.getElementById('wName').value = ''; document.getElementById('wWage').value = 10320;
-                document.getElementById('mainBtn').innerText = "+ 근무자 추가 / 정보 갱신"; document.getElementById('mainBtn').classList.remove('edit-mode');
-            }
+            if (editingWorkerId === id) { editingWorkerId = null; document.getElementById('wName').value = ''; document.getElementById('wWage').value = 10320; document.getElementById('mainBtn').innerText = "+ 근무자 추가 / 정보 갱신"; document.getElementById('mainBtn').classList.remove('edit-mode'); }
             saveDB(); updateWorkerList(); renderGridData();
+        }
+        function reinstateWorker(id, event) {
+            event.stopPropagation(); if (!_lockGuard()) return;
+            const w = db.workers.find(x => x.id === id); if (!w) return;
+            if (!confirm(`"${getBaseName(w.name)}" 복직 처리하시겠습니까?`)) return;
+            w.active = true; saveDB(); updateWorkerList(); renderGridData();
         }
 
         function updateWorkerList() {
             const list = document.getElementById('workerList'); list.innerHTML = '';
-            db.workers.forEach(w => {
+            const active = db.workers.filter(w => w.active !== false);
+            const retired = db.workers.filter(w => w.active === false);
+            active.forEach(w => {
                 const item = document.createElement('div');
                 item.className = `worker-item ${w.id === activeWorkerId ? 'active' : ''}`;
                 item.onclick = () => selectWorker(w.id);
                 let taxStr = w.taxType === 'family' ? '가족' : (w.tax == 0.094 ? '4대' : (w.tax == 0.033 ? '3.3%' : '무공제'));
-                item.innerHTML = `
-                    <div><span class="worker-color" style="background:${w.color};"></span>${w.name} <span style="font-size:11px; color:#555;">(${w.wage.toLocaleString()}원 / ${taxStr})</span></div>
-                    <div class="btn-group-sm"><button class="edit-btn" onclick="loadForEdit('${w.id}', event)">수정</button><button class="del-btn" onclick="deleteWorker('${w.id}', event)">삭제</button></div>
-                `;
+                item.innerHTML = `<div><span class="worker-color" style="background:${w.color};"></span>${w.name} <span style="font-size:11px;color:#555;">(${w.wage.toLocaleString()}원/${taxStr})</span></div>
+                    <div class="btn-group-sm"><button class="edit-btn" onclick="loadForEdit('${w.id}', event)">수정</button><button class="retire-btn" onclick="retireWorker('${w.id}', event)">퇴직</button></div>`;
                 list.appendChild(item);
             });
+            if (retired.length > 0) {
+                const title = document.createElement('div');
+                title.className = 'retire-section-title';
+                title.innerHTML = `▸ 퇴직자 (${retired.length}명) — 클릭하여 보기`;
+                title.onclick = () => { const sec = document.getElementById('retiredSection'); const exp = sec.style.display !== 'none'; sec.style.display = exp ? 'none' : 'block'; title.innerHTML = `${exp?'▸':'▾'} 퇴직자 (${retired.length}명) — 클릭하여 ${exp?'보기':'접기'}`; };
+                list.appendChild(title);
+                const section = document.createElement('div'); section.id = 'retiredSection'; section.style.display = 'none';
+                retired.forEach(w => {
+                    const item = document.createElement('div'); item.className = 'worker-item retired';
+                    let taxStr = w.taxType === 'family' ? '가족' : (w.tax == 0.094 ? '4대' : (w.tax == 0.033 ? '3.3%' : '무공제'));
+                    item.innerHTML = `<div><span class="worker-color" style="background:${w.color};opacity:0.4;"></span>🚫 ${w.name} <span style="font-size:11px;color:#999;">(${w.wage.toLocaleString()}원/${taxStr})</span></div>
+                        <div class="btn-group-sm"><button class="edit-btn" onclick="loadForEdit('${w.id}', event)">열람</button><button class="reinstate-btn" onclick="reinstateWorker('${w.id}', event)">복직</button></div>`;
+                    section.appendChild(item);
+                });
+                list.appendChild(section);
+            }
             if(activeWorkerId === 'ERASER') document.getElementById('eraserBtn').classList.add('active');
         }
 
@@ -970,9 +990,6 @@
                 // 수식 HTML 생성
                 let formulaHtml = buildFormulaHtml(r, avgWage, extraPay, taxAmount, netPay, grossPay);
 
-                let carriedHtml = '';
-                { let carried = Object.keys(r.weeks).filter(wk=>{ let e=new Date(wk); e.setDate(e.getDate()+6); return e>payEnd && r.weeks[wk].hours>=15; }); if(carried.length) carriedHtml = `<div style="color:#e65100;font-size:10px;margin-top:2px;">⚠ ${carried.map(wkLabel).join(', ')} → 다음달 이월</div>`; }
-
                 tbody.innerHTML += `
                     <tr>
                         <td>
@@ -980,18 +997,18 @@
                             <span style="font-size:10px;color:#777;">(평균시급: ${Math.floor(avgWage).toLocaleString()}원)</span><br>
                             <button onclick="toggleFormula('${formulaId}')" style="margin-top:4px;font-size:11px;padding:3px 8px;background:#e3f2fd;border:1px solid #90caf9;border-radius:4px;cursor:pointer;color:#1565c0;">📐 수식 보기</button>
                         </td>
-                        <td><div style="font-size:13px; font-weight:bold;">${r.totalHours} 시간</div>${breakdownStr}</td>
+                        <td><div style="font-size:13px;font-weight:bold;">${r.totalHours} 시간</div>${breakdownStr}</td>
                         <td style="font-size:12px;">${Math.floor(r.totalBasePay).toLocaleString()}원</td>
                         <td class="juhyu-cell">
                             <div class="juhyu-total">주휴합계: ${Math.floor(r.juhyuPay).toLocaleString()}원</div>
                             ${Object.keys(r.weeklyJuhyu).sort().map(wk => {
                                 return `<div class="juhyu-line">· ${wkLabel(wk)} (${r.weeklyJuhyu[wk].hours}H): <b>${Math.floor(r.weeklyJuhyu[wk].amount).toLocaleString()}원</b></div>`;
                             }).join('')}
-                            ${carriedHtml}
+                            ${(()=>{ let c=Object.keys(r.weeks).filter(wk=>{let e=new Date(wk);e.setDate(e.getDate()+6);return e>payEnd&&r.weeks[wk].hours>=15;}); return c.length?`<div style="color:#e65100;font-size:10px;margin-top:2px;">⚠ ${c.map(wkLabel).join(', ')} → 다음달 이월</div>`:''; })()}
                             <div class="juhyu-extra">가산: ${Math.floor(extraPay).toLocaleString()}원</div>
                         </td>
-                        <td style="color:#d32f2f; font-size:11px;">${taxTypeStr}<br><strong>-${taxAmount.toLocaleString()}원</strong></td>
-                        <td style="color:#00529b; font-weight:bold; font-size:16px;">
+                        <td style="color:#d32f2f;font-size:11px;">${taxTypeStr}<br><strong>-${taxAmount.toLocaleString()}원</strong></td>
+                        <td style="color:#00529b;font-weight:bold;font-size:16px;">
                             <div style="margin-bottom:5px;">${Math.floor(netPay).toLocaleString()}원</div>
                             ${(()=>{ const wk=db.workers.find(x=>getBaseName(x.name)===r.baseName); return (wk&&wk.account)?`<div style="font-size:10px;color:#555;font-weight:normal;background:#f5f5f5;border-radius:4px;padding:2px 5px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:5px;">🏦 <span>${wk.account}</span><button onclick="navigator.clipboard.writeText('${wk.account}').then(()=>{this.textContent='✅';setTimeout(()=>this.textContent='복사',1200)})" style="font-size:10px;padding:1px 6px;background:#e3f2fd;border:1px solid #90caf9;border-radius:3px;cursor:pointer;color:#1565c0;font-weight:bold;flex-shrink:0;">복사</button></div>`:''; })()}
                             <div style="font-size:10px;color:#888;margin-bottom:3px;">
@@ -1398,64 +1415,43 @@
 
         async function copyHistoryImage(id) {
             const area = document.getElementById('historyDetailArea');
-            const btns = area.querySelector('.history-action-bar');
-            if (btns) btns.style.display = 'none';
+            const btns = area.querySelector('.history-action-bar'); if(btns) btns.style.display='none';
             try {
-                const canvas = await html2canvas(area, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
-                if (btns) btns.style.display = '';
+                const canvas = await html2canvas(area, {scale:2, backgroundColor:'#ffffff', useCORS:true, logging:false});
+                if(btns) btns.style.display='';
                 canvas.toBlob(async blob => {
                     try {
-                        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-                        alert('✅ 이미지가 클립보드에 복사되었습니다!\n카카오톡 등에 바로 붙여넣기 하세요.');
+                        await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
+                        alert('✅ 클립보드에 복사되었습니다!\n카카오톡에 바로 붙여넣기 하세요.');
                     } catch(e) {
-                        // 클립보드 실패 시 파일 다운로드로 폴백
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(blob);
-                        const rec = db.settlements.find(s => s.id === id);
-                        a.download = (rec ? rec.title : '정산내역') + '.png';
-                        a.click();
+                        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+                        const rec = db.settlements.find(s=>s.id===id);
+                        a.download = (rec?rec.title:'정산내역')+'.png'; a.click();
                         alert('⚠️ 클립보드 복사 불가 → 이미지 파일로 저장되었습니다.');
                     }
                 }, 'image/png');
-            } catch(e) {
-                if (btns) btns.style.display = '';
-                alert('❌ 이미지 생성 실패: ' + e.message);
-            }
+            } catch(e) { if(btns) btns.style.display=''; alert('❌ 이미지 생성 실패: '+e.message); }
         }
 
         function downloadHistoryExcel(id) {
-            const record = db.settlements.find(s => s.id === id); if(!record) return;
-            const wb = XLSX.utils.book_new();
-            const rows = [];
-            // 헤더 정보
-            rows.push([record.title]);
-            rows.push(['기간:', record.data.startStr + ' ~ ' + record.data.endStr]);
-            rows.push(['저장일시:', record.timestamp]);
-            rows.push([]);
-            rows.push(['이름', '총시간(H)', '기본급', '주휴수당', '가산수당', '세금유형', '세금(공제)', '실수령액', '비고']);
-            // 데이터 행
+            const record = db.settlements.find(s=>s.id===id); if(!record) return;
+            const wb = XLSX.utils.book_new(); const rows = [];
+            rows.push([record.title]); rows.push(['기간:', record.data.startStr+' ~ '+record.data.endStr]); rows.push(['저장:', record.timestamp]); rows.push([]);
+            rows.push(['이름','총시간(H)','기본급','주휴수당','가산수당','세금유형','세금(공제)','실수령액','비고']);
             record.data.list.forEach(r => {
-                const taxTypeStr = r.taxType === 'family' ? '가족(무공제)' : (r.taxRate == 0.094 ? '4대보험' : (r.taxRate == 0.033 ? '3.3%프리랜서' : '무공제'));
+                const taxTypeStr = r.taxType==='family'?'가족(무공제)':(r.taxRate==0.094?'4대보험':(r.taxRate==0.033?'3.3%프리랜서':'무공제'));
                 const calcNet = Math.floor(r.netPay);
-                const actualNet = (record.manualPay && record.manualPay[r.baseName] !== undefined) ? record.manualPay[r.baseName] : calcNet;
-                const note = (record.manualPay && record.manualPay[r.baseName] !== undefined && actualNet !== calcNet) ? '수기지급' : '';
-                rows.push([r.baseName, r.totalHours, Math.floor(r.totalBasePay), Math.floor(r.juhyuPay), Math.floor(r.extraPay), taxTypeStr, r.taxAmount, actualNet, note]);
+                const actualNet = (record.manualPay&&record.manualPay[r.baseName]!==undefined)?record.manualPay[r.baseName]:calcNet;
+                const note = (record.manualPay&&record.manualPay[r.baseName]!==undefined&&actualNet!==calcNet)?'수기지급':'';
+                rows.push([r.baseName,r.totalHours,Math.floor(r.totalBasePay),Math.floor(r.juhyuPay),Math.floor(r.extraPay),taxTypeStr,r.taxAmount,actualNet,note]);
             });
-            // 합계
-            rows.push([]);
-            const dispTotal = record.adjustedTotal !== undefined ? record.adjustedTotal : Math.floor(record.data.storeTotal);
-            rows.push(['실지급 총액', '', '', '', '', '', '', dispTotal, '']);
-            // 특이사항
-            if (record.note) { rows.push([]); rows.push(['특이사항:', record.note]); }
-
+            rows.push([]); rows.push(['실지급 총액','','','','','','',record.adjustedTotal!==undefined?record.adjustedTotal:Math.floor(record.data.storeTotal),'']);
+            if(record.note){rows.push([]);rows.push(['특이사항:',record.note]);}
             const ws = XLSX.utils.aoa_to_sheet(rows);
-            // 열 너비
-            ws['!cols'] = [{wch:14},{wch:10},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:10}];
-            // 제목 병합
-            ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:8} }];
-            XLSX.utils.book_append_sheet(wb, ws, '정산내역');
-            const filename = record.title.replace(/[\/\\:*?"<>|]/g,'_') + '.xlsx';
-            XLSX.writeFile(wb, filename);
+            ws['!cols']=[{wch:14},{wch:10},{wch:12},{wch:12},{wch:12},{wch:14},{wch:12},{wch:12},{wch:10}];
+            ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:8}}];
+            XLSX.utils.book_append_sheet(wb,ws,'정산내역');
+            XLSX.writeFile(wb, record.title.replace(/[\/\\:*?"<>|]/g,'_')+'.xlsx');
         }
 
         function getLifetimeAutoStats(baseName) {
@@ -1473,7 +1469,7 @@
 
         function renderDashboard() {
             const tbody = document.getElementById('dashboardBody'); tbody.innerHTML = '';
-            let baseNames = new Set(); db.workers.forEach(w => baseNames.add(getBaseName(w.name)));
+            let baseNames = new Set(); db.workers.filter(w => w.active !== false).forEach(w => baseNames.add(getBaseName(w.name)));
             baseNames.forEach(bName => {
                 let auto = getLifetimeAutoStats(bName); let ov = db.overrides[bName] || {};
                 let start = ov.startDate || auto.startDate || '-'; let end = ov.endDate || auto.endDate || '-';
@@ -1629,10 +1625,7 @@
     window.addEventListener('online',  () => { if(typeof setSyncStatus==='function') setSyncStatus('synced','✅ 온라인 복구'); });
     setTimeout(() => { if(typeof setSyncStatus==='function') setSyncStatus('syncing','☁️ 연결 중...'); }, 100);
     </script>
-
-    <!-- html2canvas + SheetJS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
 </body>
 </html>
