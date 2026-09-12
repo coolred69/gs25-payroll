@@ -293,7 +293,7 @@
                                 <thead>
                                     <tr id="timetableHeader"></tr>
                                 </thead>
-                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()">
+                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()" oncontextmenu="openCtxMenu(event)" ontouchstart="touchStart(event)" ontouchend="touchEnd(event)" ontouchmove="touchMove(event)">
                                 </tbody>
                             </table>
                         </div>
@@ -393,7 +393,7 @@
     </div>
 
     <script>
-        let db = { workers: [], schedule: {}, overrides: {}, settlements: [], settings: {} };
+        let db = { workers: [], schedule: {}, splitCells: {}, overrides: {}, settlements: [], settings: {} };
         let activeWorkerId = null; let editingWorkerId = null; 
         let isDragging = false; let dragMode = 'add'; 
         let currentWeekStart = new Date();
@@ -812,16 +812,170 @@
 
         function endDrag() { if (isDragging) { isDragging = false; saveDB(); } }
 
+        // ── 분할 셀 전반/후반 피커 ──
+        let splitPickerKey = null;
+        function openSplitPicker(key, e) {
+            if (!activeWorkerId || activeWorkerId === 'ERASER') return;
+            splitPickerKey = key;
+            const picker = document.getElementById('splitPicker');
+            picker.style.display = 'block';
+            picker.style.left = Math.min(e.clientX, window.innerWidth - 170) + 'px';
+            picker.style.top = Math.min(e.clientY, window.innerHeight - 120) + 'px';
+        }
+        function splitPickAction(half) {
+            document.getElementById('splitPicker').style.display = 'none';
+            if (!splitPickerKey || !activeWorkerId || activeWorkerId === 'ERASER') return;
+            if (!db.splitCells) db.splitCells = {};
+            const subKey = splitPickerKey + (half === 'top' ? '_top' : '_bot');
+            if (!db.splitCells[subKey]) db.splitCells[subKey] = [];
+            if (db.splitCells[subKey].includes(activeWorkerId)) {
+                db.splitCells[subKey] = db.splitCells[subKey].filter(id => id !== activeWorkerId);
+            } else {
+                if (db.splitCells[subKey].length < 2) db.splitCells[subKey].push(activeWorkerId);
+            }
+            saveDB(); renderGridData();
+        }
+
+        // ── 우클릭 컨텍스트 메뉴 ──
+        let ctxKey = null;
+        function openCtxMenu(e) {
+            e.preventDefault();
+            const cell = e.target.closest('.time-cell');
+            if (!cell) return;
+            ctxKey = cell.dataset.key;
+            const workers = db.schedule[ctxKey] || [];
+            const isSplit = db.splitCells && db.splitCells[ctxKey];
+            // 제목
+            const [date, h] = ctxKey.split('_');
+            document.getElementById('ctxTitle').textContent = `${date.slice(5)} · ${h}시~${parseInt(h)+1}시`;
+            // 메뉴 상태 표시
+            document.getElementById('ctx1인').style.fontWeight = workers.length <= 1 && !isSplit ? '700' : '500';
+            document.getElementById('ctx2인').style.fontWeight = workers.length >= 2 ? '700' : '500';
+            document.getElementById('ctx30분').style.fontWeight = isSplit ? '700' : '500';
+            // 위치
+            const m = document.getElementById('ctxMenu');
+            m.style.display = 'block';
+            m.style.left = Math.min(e.clientX, window.innerWidth - 180) + 'px';
+            m.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px';
+        }
+
+        function ctxAction(type) {
+            document.getElementById('ctxMenu').style.display = 'none';
+            if (!ctxKey) return;
+            if (!db.splitCells) db.splitCells = {};
+            const workers = db.schedule[ctxKey] || [];
+
+            if (type === '1인') {
+                // 1인 근무: 2인이면 첫번째만 남기고, 분할 해제
+                if (workers.length > 1) db.schedule[ctxKey] = [workers[0]];
+                delete db.splitCells[ctxKey];
+                // 분할 하위 키도 정리
+                delete db.splitCells[ctxKey + '_top'];
+                delete db.splitCells[ctxKey + '_bot'];
+
+            } else if (type === '2인') {
+                // 2인 근무: 근무자 선택 팝업
+                if (!activeWorkerId || activeWorkerId === 'ERASER') return alert('좌측에서 추가할 직원을 선택하세요.');
+                if (!db.schedule[ctxKey]) db.schedule[ctxKey] = [];
+                if (!db.schedule[ctxKey].includes(activeWorkerId)) {
+                    if (db.schedule[ctxKey].length >= 2) return alert('이미 2인 근무입니다.');
+                    db.schedule[ctxKey].push(activeWorkerId);
+                }
+                delete db.splitCells[ctxKey];
+
+            } else if (type === '30분') {
+                // 30분 분할: 현재 직원을 전반에, 후반은 비움
+                db.splitCells[ctxKey] = true;
+                // 전반 키: ctxKey + '_top', 후반: ctxKey + '_bot'
+                if (!db.splitCells[ctxKey + '_top']) db.splitCells[ctxKey + '_top'] = [...workers];
+                if (!db.splitCells[ctxKey + '_bot']) db.splitCells[ctxKey + '_bot'] = [];
+            }
+            saveDB(); renderGridData();
+        }
+
+        // ── 모바일 길게 누르기 (long press) ──
+        let longPressTimer = null;
+        let longPressMoved = false;
+        let longPressEvent = null;
+
+        function touchStart(e) {
+            longPressMoved = false;
+            longPressEvent = e;
+            longPressTimer = setTimeout(() => {
+                if (!longPressMoved) {
+                    // 진동 피드백 (지원 기기)
+                    if (navigator.vibrate) navigator.vibrate(30);
+                    // 터치 위치로 컨텍스트 메뉴 오픈
+                    const touch = e.touches[0];
+                    const fakeEvent = {
+                        preventDefault: () => {},
+                        target: e.target,
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    };
+                    openCtxMenu(fakeEvent);
+                }
+            }, 500);
+        }
+
+        function touchMove(e) {
+            longPressMoved = true;
+            clearTimeout(longPressTimer);
+        }
+
+        function touchEnd(e) {
+            clearTimeout(longPressTimer);
+        }
+
+        // 메뉴 외부 클릭 시 닫기
+        document.addEventListener('click', () => { document.getElementById('ctxMenu').style.display = 'none'; document.getElementById('splitPicker').style.display = 'none'; });
+
         function renderGridData() {
             const cells = document.querySelectorAll('.time-cell');
             cells.forEach(cell => {
                 const key = cell.dataset.key; const workerIds = db.schedule[key] || [];
                 cell.className = 'time-cell'; cell.style.background = 'transparent'; cell.innerText = '';
-                if (workerIds.length === 1) {
+                const isSplit = db.splitCells && db.splitCells[key];
+                if (isSplit) {
+                    // 30분 분할 표시
+                    cell.classList.add('dual-cell');
+                    cell.style.background = 'transparent';
+                    cell.innerHTML = '';
+                    cell.style.border = '1.5px solid #ffc107';
+                    const topIds = db.splitCells[key + '_top'] || [];
+                    const botIds = db.splitCells[key + '_bot'] || [];
+                    // 전반
+                    let s1 = document.createElement('div'); s1.className = 'slot split-top';
+                    if (topIds.length === 1) {
+                        const wt = db.workers.find(x => x.id === topIds[0]);
+                        if(wt) { s1.style.background = wt.color; s1.innerText = getBaseName(wt.name).substring(0,2); }
+                        else { s1.style.background = '#ddd'; s1.style.color = '#999'; s1.innerText = '-'; }
+                    } else if (topIds.length === 2) {
+                        s1.style.display = 'flex'; s1.style.padding = '0';
+                        const wa = db.workers.find(x => x.id === topIds[0]);
+                        const wb = db.workers.find(x => x.id === topIds[1]);
+                        s1.innerHTML = `<div style="flex:1;background:${wa?wa.color:'#ddd'};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">${wa?getBaseName(wa.name).substring(0,2):''}</div><div style="flex:1;background:${wb?wb.color:'#ddd'};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">${wb?getBaseName(wb.name).substring(0,2):''}</div>`;
+                    } else { s1.style.background = '#f5f5f5'; s1.style.color = '#bbb'; s1.innerText = '전반'; }
+                    cell.appendChild(s1);
+                    // 후반
+                    let s2 = document.createElement('div'); s2.className = 'slot split-bot';
+                    if (botIds.length === 1) {
+                        const wb2 = db.workers.find(x => x.id === botIds[0]);
+                        if(wb2) { s2.style.background = wb2.color; s2.innerText = getBaseName(wb2.name).substring(0,2); }
+                        else { s2.style.background = '#ddd'; s2.style.color = '#999'; s2.innerText = '-'; }
+                    } else if (botIds.length === 2) {
+                        s2.style.display = 'flex'; s2.style.padding = '0';
+                        const wc = db.workers.find(x => x.id === botIds[0]);
+                        const wd = db.workers.find(x => x.id === botIds[1]);
+                        s2.innerHTML = `<div style="flex:1;background:${wc?wc.color:'#ddd'};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">${wc?getBaseName(wc.name).substring(0,2):''}</div><div style="flex:1;background:${wd?wd.color:'#ddd'};display:flex;align-items:center;justify-content:center;font-size:9px;color:white;">${wd?getBaseName(wd.name).substring(0,2):''}</div>`;
+                    } else { s2.style.background = '#f5f5f5'; s2.style.color = '#bbb'; s2.innerText = '후반'; }
+                    cell.appendChild(s2);
+                    // 분할 셀 좌클릭 → 전반/후반 개별 입력
+                    cell.onclick = (ev) => { ev.stopPropagation(); openSplitPicker(key, ev); };
+                } else if (workerIds.length === 1) {
                     const w = db.workers.find(x => x.id === workerIds[0]);
                     if(w) { cell.style.background = w.color; cell.innerText = getBaseName(w.name).substring(0, 2); }
                 } else if (workerIds.length === 2) {
-                    // 2인 근무: 위아래 반반 표시
                     const w1 = db.workers.find(x => x.id === workerIds[0]);
                     const w2 = db.workers.find(x => x.id === workerIds[1]);
                     cell.classList.add('dual-cell');
@@ -1505,6 +1659,36 @@
     </script>
 
     <!-- Firebase SDK (Realtime Database) -->
+    <!-- 우클릭 컨텍스트 메뉴 -->
+    <div id="ctxMenu" style="display:none;position:fixed;z-index:9999;background:var(--surface-2,#fff);border:0.5px solid #bbb;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:160px;overflow:hidden;font-family:sans-serif;">
+        <div id="ctxTitle" style="padding:8px 12px;background:#f5f5f5;border-bottom:0.5px solid #ddd;font-size:11px;font-weight:600;color:#555;"></div>
+        <div class="ctx-item" id="ctx1인" onclick="ctxAction('1인')" style="padding:10px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid #eee;">
+            <div style="width:26px;height:18px;border-radius:3px;background:#3949ab;"></div>1인 근무
+        </div>
+        <div class="ctx-item" id="ctx2인" onclick="ctxAction('2인')" style="padding:10px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid #eee;">
+            <div style="width:26px;height:18px;border-radius:3px;overflow:hidden;display:flex;"><div style="flex:1;background:#3949ab;"></div><div style="flex:1;background:#e53935;"></div></div>2인 근무
+        </div>
+        <div class="ctx-item" id="ctx30분" onclick="ctxAction('30분')" style="padding:10px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;">
+            <div style="width:26px;height:18px;border-radius:3px;overflow:hidden;border:1px solid #ddd;"><div style="height:50%;background:#3949ab;"></div><div style="height:50%;background:#e53935;"></div></div>30분 분할
+        </div>
+    </div>
+    <style>
+        .ctx-item:hover { background: #f0f4ff !important; }
+        .split-top { border-radius: 3px 3px 0 0 !important; height: 50% !important; }
+        .split-bot { border-radius: 0 0 3px 3px !important; height: 50% !important; }
+    </style>
+
+    <!-- 전반/후반 피커 -->
+    <div id="splitPicker" style="display:none;position:fixed;z-index:9999;background:#fff;border:0.5px solid #bbb;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);overflow:hidden;font-family:sans-serif;">
+        <div style="padding:7px 12px;background:#fff9e6;border-bottom:0.5px solid #ffe082;font-size:11px;font-weight:600;color:#e65100;">30분 분할 입력</div>
+        <div onclick="splitPickAction('top')" style="padding:10px 14px;font-size:12px;font-weight:500;cursor:pointer;border-bottom:0.5px solid #eee;display:flex;align-items:center;gap:8px;">
+            <div style="width:26px;height:18px;border-radius:3px;overflow:hidden;border:1px solid #ddd;"><div style="height:50%;background:#ffc107;"></div><div style="height:50%;background:#f5f5f5;"></div></div>전반 (정시~30분)
+        </div>
+        <div onclick="splitPickAction('bot')" style="padding:10px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;">
+            <div style="width:26px;height:18px;border-radius:3px;overflow:hidden;border:1px solid #ddd;"><div style="height:50%;background:#f5f5f5;"></div><div style="height:50%;background:#ffc107;"></div></div>후반 (30분~다음 정시)
+        </div>
+    </div>
+
     <script type="module">
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
     import { getDatabase, ref, set, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
