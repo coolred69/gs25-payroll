@@ -788,7 +788,7 @@
             if (!activeWorkerId) return alert("좌측에서 칠할 대상을 선택하세요.");
             if (!e.target.classList.contains('time-cell')) return;
             isDragging = true; const key = e.target.dataset.key;
-            if (activeWorkerId === 'ERASER') { dragMode = 'erase_all'; delete db.schedule[key]; } 
+            if (activeWorkerId === 'ERASER') { dragMode = 'erase_all'; delete db.schedule[key]; if(db.splitCells){ delete db.splitCells[key]; delete db.splitCells[key+'_top']; delete db.splitCells[key+'_bot']; } } 
             else {
                 if (!db.schedule[key]) db.schedule[key] = [];
                 if (db.schedule[key].includes(activeWorkerId)) { dragMode = 'remove'; db.schedule[key] = db.schedule[key].filter(id => id !== activeWorkerId); } 
@@ -801,7 +801,7 @@
             if (!isDragging || !activeWorkerId) return;
             if (!e.target.classList.contains('time-cell')) return;
             const key = e.target.dataset.key;
-            if (activeWorkerId === 'ERASER' && dragMode === 'erase_all') { delete db.schedule[key]; } 
+            if (activeWorkerId === 'ERASER' && dragMode === 'erase_all') { delete db.schedule[key]; if(db.splitCells){ delete db.splitCells[key]; delete db.splitCells[key+'_top']; delete db.splitCells[key+'_bot']; } } 
             else {
                 if (!db.schedule[key]) db.schedule[key] = [];
                 if (dragMode === 'add' && !db.schedule[key].includes(activeWorkerId)) { db.schedule[key].push(activeWorkerId); } 
