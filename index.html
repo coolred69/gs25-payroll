@@ -20,7 +20,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.2)</title>
+    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.3)</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
         .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #00529b; margin-bottom: 20px; }
@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>GS25 평택점 종합 노무 시스템 (V8.2)</h2>
+        <h2>GS25 평택점 종합 노무 시스템 (V8.3)</h2>
         
         <div id="todayDateDisplay" class="today-display"></div>
         <div id="settlementAlert" class="alert-box">
@@ -834,10 +834,13 @@
             renderGridData();
         }
 
+        let lastDragKey = null;
         function doDrag(e) {
             if (!isDragging || !activeWorkerId) return;
             if (!e.target.classList.contains('time-cell')) return;
             const key = e.target.dataset.key;
+            if (key === lastDragKey) return; // 같은 셀 중복 처리 스킵
+            lastDragKey = key;
             if (activeWorkerId === 'ERASER' && dragMode === 'erase_all') {
                 delete db.schedule[key];
                 if(db.splitCells){ delete db.splitCells[key]; delete db.splitCells[key+'_top']; delete db.splitCells[key+'_bot']; }
@@ -849,10 +852,10 @@
                 if (dragMode === 'add' && !db.schedule[key].includes(activeWorkerId)) { db.schedule[key].push(activeWorkerId); delete db.splitCells[key]; }
                 else if (dragMode === 'remove' && db.schedule[key].includes(activeWorkerId)) { db.schedule[key] = db.schedule[key].filter(id => id !== activeWorkerId); }
             }
-            renderGridData();
+            renderGridData(key); // 해당 셀만 업데이트
         }
 
-        function endDrag() { if (isDragging) { isDragging = false; saveDB(); } }
+        function endDrag() { if (isDragging) { isDragging = false; lastDragKey = null; saveDB(); } }
 
         // ── 분할 셀 전반/후반 피커 ──
         let splitPickerKey = null;
@@ -1036,8 +1039,10 @@
         // 메뉴 외부 클릭 시 닫기
         document.addEventListener('click', () => { document.getElementById('ctxMenu').style.display = 'none'; document.getElementById('splitPicker').style.display = 'none'; });
 
-        function renderGridData() {
-            const cells = document.querySelectorAll('.time-cell');
+        function renderGridData(targetKey = null) {
+            const cells = targetKey
+                ? document.querySelectorAll(`.time-cell[data-key="${targetKey}"]`)
+                : document.querySelectorAll('.time-cell');
             cells.forEach(cell => {
                 const key = cell.dataset.key; const workerIds = db.schedule[key] || [];
                 cell.className = 'time-cell'; cell.style.background = 'transparent'; cell.innerText = '';
