@@ -783,16 +783,52 @@
             weekSnapshot = JSON.stringify(getCurrentWeekSchedule());
         }
 
+        let dragConfig = null; // 드래그 복사용 설정
+
+        function applyDragConfig(key) {
+            if (!dragConfig) return;
+            if (!db.splitCells) db.splitCells = {};
+            if (dragConfig.type === 'split') {
+                db.splitCells[key] = true;
+                db.splitCells[key+'_top'] = [...dragConfig.top];
+                db.splitCells[key+'_bot'] = [...dragConfig.bot];
+                db.schedule[key] = [...dragConfig.top, ...dragConfig.bot].filter((v,i,a)=>a.indexOf(v)===i);
+            } else if (dragConfig.type === 'dual') {
+                db.schedule[key] = [...dragConfig.workers];
+                delete db.splitCells[key];
+            } else {
+                db.schedule[key] = [dragConfig.workerId];
+                delete db.splitCells[key];
+            }
+        }
+
         function startDrag(e) {
             if (!_lockGuard()) return;
             if (!activeWorkerId) return alert("좌측에서 칠할 대상을 선택하세요.");
             if (!e.target.classList.contains('time-cell')) return;
             isDragging = true; const key = e.target.dataset.key;
-            if (activeWorkerId === 'ERASER') { dragMode = 'erase_all'; delete db.schedule[key]; if(db.splitCells){ delete db.splitCells[key]; delete db.splitCells[key+'_top']; delete db.splitCells[key+'_bot']; } } 
-            else {
-                if (!db.schedule[key]) db.schedule[key] = [];
-                if (db.schedule[key].includes(activeWorkerId)) { dragMode = 'remove'; db.schedule[key] = db.schedule[key].filter(id => id !== activeWorkerId); } 
-                else { dragMode = 'add'; db.schedule[key].push(activeWorkerId); }
+            if (activeWorkerId === 'ERASER') {
+                dragMode = 'erase_all'; dragConfig = null;
+                delete db.schedule[key];
+                if(db.splitCells){ delete db.splitCells[key]; delete db.splitCells[key+'_top']; delete db.splitCells[key+'_bot']; }
+            } else {
+                const isSplit = db.splitCells && db.splitCells[key];
+                const workers = db.schedule[key] || [];
+                if (isSplit) {
+                    // 분할 셀에서 드래그 시작 → 설정 복사
+                    dragMode = 'copy_config';
+                    dragConfig = { type:'split', top:[...(db.splitCells[key+'_top']||[])], bot:[...(db.splitCells[key+'_bot']||[])] };
+                } else if (workers.length >= 2) {
+                    // 2인 셀에서 드래그 시작 → 설정 복사
+                    dragMode = 'copy_config';
+                    dragConfig = { type:'dual', workers:[...workers] };
+                } else {
+                    // 일반 1인 드래그
+                    dragConfig = { type:'single', workerId: activeWorkerId };
+                    if (!db.schedule[key]) db.schedule[key] = [];
+                    if (db.schedule[key].includes(activeWorkerId)) { dragMode = 'remove'; db.schedule[key] = db.schedule[key].filter(id => id !== activeWorkerId); }
+                    else { dragMode = 'add'; db.schedule[key].push(activeWorkerId); }
+                }
             }
             renderGridData();
         }
@@ -801,10 +837,15 @@
             if (!isDragging || !activeWorkerId) return;
             if (!e.target.classList.contains('time-cell')) return;
             const key = e.target.dataset.key;
-            if (activeWorkerId === 'ERASER' && dragMode === 'erase_all') { delete db.schedule[key]; if(db.splitCells){ delete db.splitCells[key]; delete db.splitCells[key+'_top']; delete db.splitCells[key+'_bot']; } } 
-            else {
+            if (activeWorkerId === 'ERASER' && dragMode === 'erase_all') {
+                delete db.schedule[key];
+                if(db.splitCells){ delete db.splitCells[key]; delete db.splitCells[key+'_top']; delete db.splitCells[key+'_bot']; }
+            } else if (dragMode === 'copy_config') {
+                applyDragConfig(key);
+            } else {
+                if (!db.splitCells) db.splitCells = {};
                 if (!db.schedule[key]) db.schedule[key] = [];
-                if (dragMode === 'add' && !db.schedule[key].includes(activeWorkerId)) { db.schedule[key].push(activeWorkerId); } 
+                if (dragMode === 'add' && !db.schedule[key].includes(activeWorkerId)) { db.schedule[key].push(activeWorkerId); delete db.splitCells[key]; }
                 else if (dragMode === 'remove' && db.schedule[key].includes(activeWorkerId)) { db.schedule[key] = db.schedule[key].filter(id => id !== activeWorkerId); }
             }
             renderGridData();
@@ -859,38 +900,102 @@
             m.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px';
         }
 
+        function ctxShowSub(type) {
+            // 서브패널 토글
+            document.getElementById('ctx2인Sub').style.display = 'none';
+            document.getElementById('ctx30분Sub').style.display = 'none';
+            if (type === '2인') {
+                const sub = document.getElementById('ctx2인Sub');
+                sub.innerHTML = '';
+                db.workers.forEach(w => {
+                    const cur = db.schedule[ctxKey] || [];
+                    const checked = cur.includes(w.id);
+                    const btn = document.createElement('div');
+                    btn.style.cssText = `padding:5px 8px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;border-radius:4px;margin:2px 0;background:${checked?w.color+'22':'transparent'}`;
+                    btn.innerHTML = `<div style="width:12px;height:12px;border-radius:50%;background:${w.color};"></div><span style="font-weight:${checked?'700':'400'}">${w.name}</span>${checked?'<span style="margin-left:auto;color:'+w.color+';">✓</span>':''}`;
+                    btn.onclick = () => { ctxAction2인(w.id); };
+                    sub.appendChild(btn);
+                });
+                sub.style.display = 'block';
+            } else if (type === '30분') {
+                // 30분: 먼저 분할 활성화
+                if (!db.splitCells) db.splitCells = {};
+                if (!db.splitCells[ctxKey]) {
+                    db.splitCells[ctxKey] = true;
+                    const cur = db.schedule[ctxKey] || [];
+                    db.splitCells[ctxKey+'_top'] = [...cur];
+                    db.splitCells[ctxKey+'_bot'] = [];
+                }
+                const renderHalf = (halfKey, containerId) => {
+                    const sub = document.getElementById(containerId);
+                    sub.innerHTML = '';
+                    db.workers.forEach(w => {
+                        const arr = db.splitCells[halfKey] || [];
+                        const checked = arr.includes(w.id);
+                        const btn = document.createElement('div');
+                        btn.style.cssText = `padding:5px 8px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;border-radius:4px;margin:2px 0;background:${checked?w.color+'22':'transparent'}`;
+                        btn.innerHTML = `<div style="width:12px;height:12px;border-radius:50%;background:${w.color};"></div><span style="font-weight:${checked?'700':'400'}">${w.name}</span>${checked?'<span style="margin-left:auto;color:'+w.color+';">✓</span>':''}`;
+                        btn.onclick = (ev) => { ev.stopPropagation(); ctxAction30분(halfKey, w.id, containerId); };
+                        sub.appendChild(btn);
+                    });
+                };
+                renderHalf(ctxKey+'_top', 'ctx30분TopSub');
+                renderHalf(ctxKey+'_bot', 'ctx30분BotSub');
+                document.getElementById('ctx30분Sub').style.display = 'block';
+                saveDB(); renderGridData();
+            }
+        }
+
+        function ctxAction2인(wId) {
+            if (!db.schedule[ctxKey]) db.schedule[ctxKey] = [];
+            const cur = db.schedule[ctxKey];
+            if (cur.includes(wId)) {
+                db.schedule[ctxKey] = cur.filter(id => id !== wId);
+            } else {
+                if (cur.length >= 2) { cur.shift(); }
+                db.schedule[ctxKey].push(wId);
+            }
+            delete db.splitCells[ctxKey];
+            saveDB(); renderGridData();
+            ctxShowSub('2인');
+        }
+
+        function ctxAction30분(halfKey, wId, containerId) {
+            if (!db.splitCells[halfKey]) db.splitCells[halfKey] = [];
+            const arr = db.splitCells[halfKey];
+            if (arr.includes(wId)) {
+                db.splitCells[halfKey] = arr.filter(id => id !== wId);
+            } else {
+                if (arr.length >= 2) arr.shift();
+                db.splitCells[halfKey].push(wId);
+            }
+            saveDB(); renderGridData();
+            // 리렌더
+            const sub = document.getElementById(containerId);
+            sub.querySelectorAll('div').forEach(btn => btn.remove());
+            db.workers.forEach(w => {
+                const newArr = db.splitCells[halfKey] || [];
+                const checked = newArr.includes(w.id);
+                const btn = document.createElement('div');
+                btn.style.cssText = `padding:5px 8px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:6px;border-radius:4px;margin:2px 0;background:${checked?w.color+'22':'transparent'}`;
+                btn.innerHTML = `<div style="width:12px;height:12px;border-radius:50%;background:${w.color};"></div><span style="font-weight:${checked?'700':'400'}">${w.name}</span>${checked?'<span style="margin-left:auto;color:'+w.color+';">✓</span>':''}`;
+                btn.onclick = (ev) => { ev.stopPropagation(); ctxAction30분(halfKey, w.id, containerId); };
+                sub.appendChild(btn);
+            });
+        }
+
         function ctxAction(type) {
             document.getElementById('ctxMenu').style.display = 'none';
             if (!ctxKey) return;
             if (!db.splitCells) db.splitCells = {};
-            const workers = db.schedule[ctxKey] || [];
-
             if (type === '1인') {
-                // 1인 근무: 2인이면 첫번째만 남기고, 분할 해제
+                const workers = db.schedule[ctxKey] || [];
                 if (workers.length > 1) db.schedule[ctxKey] = [workers[0]];
                 delete db.splitCells[ctxKey];
-                // 분할 하위 키도 정리
                 delete db.splitCells[ctxKey + '_top'];
                 delete db.splitCells[ctxKey + '_bot'];
-
-            } else if (type === '2인') {
-                // 2인 근무: 근무자 선택 팝업
-                if (!activeWorkerId || activeWorkerId === 'ERASER') return alert('좌측에서 추가할 직원을 선택하세요.');
-                if (!db.schedule[ctxKey]) db.schedule[ctxKey] = [];
-                if (!db.schedule[ctxKey].includes(activeWorkerId)) {
-                    if (db.schedule[ctxKey].length >= 2) return alert('이미 2인 근무입니다.');
-                    db.schedule[ctxKey].push(activeWorkerId);
-                }
-                delete db.splitCells[ctxKey];
-
-            } else if (type === '30분') {
-                // 30분 분할: 현재 직원을 전반에, 후반은 비움
-                db.splitCells[ctxKey] = true;
-                // 전반 키: ctxKey + '_top', 후반: ctxKey + '_bot'
-                if (!db.splitCells[ctxKey + '_top']) db.splitCells[ctxKey + '_top'] = [...workers];
-                if (!db.splitCells[ctxKey + '_bot']) db.splitCells[ctxKey + '_bot'] = [];
+                saveDB(); renderGridData();
             }
-            saveDB(); renderGridData();
         }
 
         // ── 모바일 길게 누르기 (long press) ──
@@ -1660,16 +1765,23 @@
 
     <!-- Firebase SDK (Realtime Database) -->
     <!-- 우클릭 컨텍스트 메뉴 -->
-    <div id="ctxMenu" style="display:none;position:fixed;z-index:9999;background:var(--surface-2,#fff);border:0.5px solid #bbb;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:160px;overflow:hidden;font-family:sans-serif;">
+    <div id="ctxMenu" style="display:none;position:fixed;z-index:9999;background:#fff;border:0.5px solid #bbb;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:190px;overflow:hidden;font-family:sans-serif;">
         <div id="ctxTitle" style="padding:8px 12px;background:#f5f5f5;border-bottom:0.5px solid #ddd;font-size:11px;font-weight:600;color:#555;"></div>
-        <div class="ctx-item" id="ctx1인" onclick="ctxAction('1인')" style="padding:10px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid #eee;">
+        <div class="ctx-item" id="ctx1인" onclick="ctxAction('1인')" style="padding:9px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid #eee;">
             <div style="width:26px;height:18px;border-radius:3px;background:#3949ab;"></div>1인 근무
         </div>
-        <div class="ctx-item" id="ctx2인" onclick="ctxAction('2인')" style="padding:10px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid #eee;">
-            <div style="width:26px;height:18px;border-radius:3px;overflow:hidden;display:flex;"><div style="flex:1;background:#3949ab;"></div><div style="flex:1;background:#e53935;"></div></div>2인 근무
+        <div class="ctx-item" id="ctx2인" style="padding:9px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid #eee;" onclick="ctxShowSub('2인')">
+            <div style="width:26px;height:18px;border-radius:3px;overflow:hidden;display:flex;"><div style="flex:1;background:#3949ab;"></div><div style="flex:1;background:#e53935;"></div></div>2인 근무 ▶
         </div>
-        <div class="ctx-item" id="ctx30분" onclick="ctxAction('30분')" style="padding:10px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;">
-            <div style="width:26px;height:18px;border-radius:3px;overflow:hidden;border:1px solid #ddd;"><div style="height:50%;background:#3949ab;"></div><div style="height:50%;background:#e53935;"></div></div>30분 분할
+        <div id="ctx2인Sub" style="display:none;background:#f9f9f9;border-bottom:0.5px solid #eee;padding:4px 8px;max-height:160px;overflow-y:auto;"></div>
+        <div class="ctx-item" id="ctx30분" style="padding:9px 14px;font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:0.5px solid #eee;" onclick="ctxShowSub('30분')">
+            <div style="width:26px;height:18px;border-radius:3px;overflow:hidden;border:1px solid #ddd;"><div style="height:50%;background:#3949ab;"></div><div style="height:50%;background:#e53935;"></div></div>30분 분할 ▶
+        </div>
+        <div id="ctx30분Sub" style="display:none;background:#fff9e6;border-bottom:0.5px solid #ffe082;">
+            <div style="padding:4px 8px 2px;font-size:10px;color:#e65100;font-weight:600;">전반 근무자</div>
+            <div id="ctx30분TopSub" style="padding:0 8px 4px;max-height:120px;overflow-y:auto;"></div>
+            <div style="padding:4px 8px 2px;font-size:10px;color:#1565c0;font-weight:600;border-top:0.5px solid #ffe082;">후반 근무자</div>
+            <div id="ctx30분BotSub" style="padding:0 8px 4px;max-height:120px;overflow-y:auto;"></div>
         </div>
     </div>
     <style>
