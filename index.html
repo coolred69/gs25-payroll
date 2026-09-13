@@ -20,7 +20,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.3)</title>
+    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.4)</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
         .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #00529b; margin-bottom: 20px; }
@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>GS25 평택점 종합 노무 시스템 (V8.3)</h2>
+        <h2>GS25 평택점 종합 노무 시스템 (V8.4)</h2>
         
         <div id="todayDateDisplay" class="today-display"></div>
         <div id="settlementAlert" class="alert-box">
@@ -293,7 +293,7 @@
                                 <thead>
                                     <tr id="timetableHeader"></tr>
                                 </thead>
-                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()" oncontextmenu="openCtxMenu(event)" ontouchstart="touchStart(event)" ontouchend="touchEnd(event)" ontouchmove="touchMove(event)">
+                                <tbody id="timetableBody" onmousedown="startDrag(event)" onmouseover="doDrag(event)" onmouseup="endDrag()" onmouseleave="endDrag()" oncontextmenu="openCtxMenu(event)">
                                 </tbody>
                             </table>
                         </div>
@@ -1000,6 +1000,14 @@
                 delete db.splitCells[ctxKey + '_bot'];
                 saveDB(); renderGridData();
             }
+        }
+
+        // ── 모바일 길게 누르기: 터치 기기에서만 등록 ──
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+            const tb = document.getElementById('timetableBody');
+            tb.addEventListener('touchstart', touchStart, { passive: true });
+            tb.addEventListener('touchend', touchEnd);
+            tb.addEventListener('touchmove', touchMove, { passive: true });
         }
 
         // ── 모바일 길게 누르기 (long press) ──
