@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gs25-payroll-v21';
+const CACHE_NAME = 'gs25-payroll-v22';
 const URLS_TO_CACHE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
@@ -9,13 +9,12 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(caches.match(e.request).then(cached => {
-    if (cached) return cached;
-    return fetch(e.request).then(res => {
+  e.respondWith(
+    fetch(e.request).then(res => {
       if (!res || res.status !== 200) return res;
       const clone = res.clone();
       caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
       return res;
-    }).catch(() => caches.match('./index.html'));
-  }));
+    }).catch(() => caches.match(e.request))
+  );
 });
