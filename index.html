@@ -803,6 +803,7 @@
         }
 
         function startDrag(e) {
+            if (e.button === 2) return; // 우클릭 무시
             if (!_lockGuard()) return;
             if (!activeWorkerId) return alert("좌측에서 칠할 대상을 선택하세요.");
             if (!e.target.classList.contains('time-cell')) return;
