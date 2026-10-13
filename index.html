@@ -20,7 +20,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.5)</title>
+    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.6)</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
         .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #00529b; margin-bottom: 20px; }
@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>GS25 평택점 종합 노무 시스템 (V8.5)</h2>
+        <h2>GS25 평택점 종합 노무 시스템 (V8.6)</h2>
         
         <div id="todayDateDisplay" class="today-display"></div>
         <div id="settlementAlert" class="alert-box">
@@ -735,13 +735,25 @@
         function copyPreviousWeek() {
             if (!_lockGuard()) return;
             if(!confirm("⚠️ '지난주 스케줄'로 덮어씌워집니다. 진행하시겠습니까?")) return;
+            if (!db.splitCells) db.splitCells = {};
             for (let i = 0; i < 7; i++) {
                 let currDay = new Date(currentWeekStart); currDay.setDate(currDay.getDate() + i); let currDateStr = formatDate(currDay);
                 let prevDay = new Date(currDay); prevDay.setDate(prevDay.getDate() - 7); let prevDateStr = formatDate(prevDay);
                 for (let h = 0; h < 24; h++) {
                     let currKey = `${currDateStr}_${h}`; let prevKey = `${prevDateStr}_${h}`;
-                    if (db.schedule[prevKey] && db.schedule[prevKey].length > 0) { db.schedule[currKey] = [...db.schedule[prevKey]]; } 
+                    // schedule 복사
+                    if (db.schedule[prevKey] && db.schedule[prevKey].length > 0) { db.schedule[currKey] = [...db.schedule[prevKey]]; }
                     else { delete db.schedule[currKey]; }
+                    // splitCells 복사
+                    if (db.splitCells[prevKey]) {
+                        db.splitCells[currKey] = true;
+                        db.splitCells[currKey+'_top'] = [...(db.splitCells[prevKey+'_top'] || [])];
+                        db.splitCells[currKey+'_bot'] = [...(db.splitCells[prevKey+'_bot'] || [])];
+                    } else {
+                        delete db.splitCells[currKey];
+                        delete db.splitCells[currKey+'_top'];
+                        delete db.splitCells[currKey+'_bot'];
+                    }
                 }
             }
             saveDB(); renderGridData();
@@ -1158,15 +1170,50 @@
 
                 for (let h = 0; h < 24; h++) {
                     const key = `${dateStr}_${h}`;
-                    const workersInHour = db.schedule[key] || [];
+                    const isSplitCell = db.splitCells && db.splitCells[key];
 
-                    // ★ 연장/야간수당 판정용: 00~05시는 전날 날짜로 귀속
+                    // ★ 30분 분할: 전반/후반 각 0.5H로 별도 집계
+                    if (isSplitCell) {
+                        let otDateStr = dateStr;
+                        if (h < 6) { let p = new Date(curr); p.setDate(p.getDate()-1); otDateStr = formatDate(p); }
+                        const otDate = new Date(otDateStr);
+                        const isOtInPay = (otDate >= payStart && otDate <= payEnd);
+                        let wkDate2 = new Date(dateStr);
+                        if (h < 6) wkDate2.setDate(wkDate2.getDate() - 1);
+                        const wkKey2 = getWeekKey(wkDate2);
+
+                        ['_top','_bot'].forEach(half => {
+                            (db.splitCells[key+half] || []).forEach(wId => {
+                                const w = db.workers.find(x => x.id === wId); if(!w) return;
+                                const bn = getBaseName(w.name);
+                                if(!results[bn]) results[bn] = { baseName:bn, taxRate:(w.tax||0), taxType:(w.taxType||''), totalHours:0, totalBasePay:0, nightHours:0, overtimeHours:0, juhyuPay:0, weeks:{}, weeklyJuhyu:{}, wageBreakdown:{} };
+                                let r = results[bn];
+                                if (!r.weeks[wkKey2]) r.weeks[wkKey2] = { hours:0, wages:0 };
+                                r.weeks[wkKey2].hours += 0.5;
+                                r.weeks[wkKey2].wages += w.wage * 0.5;
+                                if (isInPayPeriod) {
+                                    r.totalHours += 0.5;
+                                    r.totalBasePay += w.wage * 0.5;
+                                    if (!r.wageBreakdown[w.wage]) r.wageBreakdown[w.wage] = 0;
+                                    r.wageBreakdown[w.wage] += 0.5;
+                                    if (h >= 22 || h < 6) r.nightHours += 0.5;
+                                }
+                                if (isOtInPay) {
+                                    if (!dailyHoursMap[otDateStr]) dailyHoursMap[otDateStr] = {};
+                                    if (!dailyHoursMap[otDateStr][bn]) dailyHoursMap[otDateStr][bn] = 0;
+                                    dailyHoursMap[otDateStr][bn] += 0.5;
+                                }
+                            });
+                        });
+                        continue;
+                    }
+
+                    const workersInHour = db.schedule[key] || [];
                     let overtimeDateStr = dateStr;
                     if (h < 6) {
                         let prevDay = new Date(curr); prevDay.setDate(prevDay.getDate() - 1);
                         overtimeDateStr = formatDate(prevDay);
                     }
-                    // 귀속 날짜가 정산기간 내인지
                     const overtimeDate = new Date(overtimeDateStr);
                     const isOvertimeInPayPeriod = (overtimeDate >= payStart && overtimeDate <= payEnd);
 
