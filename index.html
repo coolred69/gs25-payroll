@@ -20,7 +20,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.9)</title>
+    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V9.0)</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
         .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #00529b; margin-bottom: 20px; }
@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>GS25 평택점 종합 노무 시스템 (V8.9)</h2>
+        <h2>GS25 평택점 종합 노무 시스템 (V9.0)</h2>
         
         <div id="todayDateDisplay" class="today-display"></div>
         <div id="settlementAlert" class="alert-box">
@@ -326,6 +326,7 @@
                         <div class="result-btn-group">
                             <button class="save-history-btn" onclick="saveSnapshot()">💾 이 정산 내역 영구 보관 (대장 저장)</button>
                             <button class="kakao-btn" onclick="copyToKakao()">💬 카카오톡 요약 복사하기</button>
+                            <button class="kakao-btn" style="background:#ff9800;color:#fff;margin-top:6px;" onclick="copyDepositAll(this)">💸 입금 일괄 복사 (전체)</button>
                         </div>
                     </div>
                 </div>
@@ -1414,6 +1415,24 @@
             });
         }
 
+        function copyTextWithFeedback(text, btn, okLabel) {
+            const done = () => { if (btn) { const o = btn.textContent; btn.textContent = okLabel; setTimeout(() => btn.textContent = o, 1400); } };
+            const fallback = () => { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); done(); } catch (e) { prompt('복사해서 사용하세요', text); } document.body.removeChild(t); };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+        }
+        function copyDepositAll(btn) {
+            if (!currentCalcSnapshot || !currentCalcSnapshot.list) return alert("먼저 급여 산출을 진행하십시오.");
+            const lines = []; const missing = [];
+            currentCalcSnapshot.list.forEach(r => {
+                const wk = db.workers.find(x => getBaseName(x.name) === r.baseName);
+                const amount = manualPayMap[r.baseName] !== undefined ? manualPayMap[r.baseName] : Math.floor(r.netPay);
+                if (!wk || !wk.account) { missing.push(r.baseName); return; }
+                lines.push(wk.account.trim() + ' ' + r.baseName + ' ' + amount);
+            });
+            if (!lines.length) return alert("복사할 계좌 정보가 없습니다.");
+            copyTextWithFeedback(lines.join('\n'), btn, '✅ ' + lines.length + '건 복사됨');
+            if (missing.length) alert("계좌 미등록으로 제외: " + missing.join(', '));
+        }
         function copyDeposit(baseName, btn) {
             if (!currentCalcSnapshot || !currentCalcSnapshot.list) return alert("먼저 급여 산출을 진행하십시오.");
             const r = currentCalcSnapshot.list.find(x => x.baseName === baseName);
