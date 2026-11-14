@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gs25-payroll-v22';
+const CACHE_NAME = 'gs25-payroll-v23';
 const URLS_TO_CACHE = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
