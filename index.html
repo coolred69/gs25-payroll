@@ -20,7 +20,7 @@
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.8)</title>
+    <title>GS25 평택점 통합 스케줄 & 정산 시스템 (V8.9)</title>
     <style>
         body { font-family: 'Malgun Gothic', sans-serif; max-width: 1300px; margin: auto; padding: 20px; background: #f4f6f9; color: #333; user-select: none; }
         .container { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-top: 5px solid #00529b; margin-bottom: 20px; }
@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>GS25 평택점 종합 노무 시스템 (V8.8)</h2>
+        <h2>GS25 평택점 종합 노무 시스템 (V8.9)</h2>
         
         <div id="todayDateDisplay" class="today-display"></div>
         <div id="settlementAlert" class="alert-box">
@@ -1348,6 +1348,7 @@
                                 oninput="updateManualPay(this)">
                             <div class="manual-net" data-name="${r.baseName}" style="font-size:11px;margin-top:3px;display:none;"></div>
                             <button onclick="copyEmployeeMsg('${r.baseName}')" style="margin-top:6px;width:100%;font-size:11px;padding:4px 0;background:#e8f5e9;border:1px solid #66bb6a;border-radius:4px;cursor:pointer;color:#2e7d32;font-weight:bold;">📱 개인 메시지 복사</button>
+                            <button onclick="copyDeposit('${r.baseName}',this)" style="margin-top:4px;width:100%;font-size:11px;padding:4px 0;background:#fff3e0;border:1px solid #ffb74d;border-radius:4px;cursor:pointer;color:#e65100;font-weight:bold;">💸 입금 복사</button>
                         </td>
                     </tr>
                     <tr id="${formulaId}" style="display:none;">
@@ -1413,6 +1414,19 @@
             });
         }
 
+        function copyDeposit(baseName, btn) {
+            if (!currentCalcSnapshot || !currentCalcSnapshot.list) return alert("먼저 급여 산출을 진행하십시오.");
+            const r = currentCalcSnapshot.list.find(x => x.baseName === baseName);
+            const wk = db.workers.find(x => getBaseName(x.name) === baseName);
+            if (!r) return;
+            if (!wk || !wk.account) return alert(baseName + ": 등록된 계좌가 없습니다. 근무자 정보에 계좌를 입력해 주세요.");
+            const calcNet = Math.floor(r.netPay);
+            const amount = manualPayMap[baseName] !== undefined ? manualPayMap[baseName] : calcNet;
+            const text = wk.account.trim() + ' ' + baseName + ' ' + amount;
+            const done = () => { if (btn) { const o = btn.textContent; btn.textContent = '✅ 복사됨'; setTimeout(() => btn.textContent = o, 1400); } };
+            const fallback = () => { const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand('copy'); done(); } catch (e) { prompt('복사해서 사용하세요', text); } document.body.removeChild(t); };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+        }
         function copyEmployeeMsg(baseName) {
             if (!currentCalcSnapshot || !currentCalcSnapshot.list) return alert("먼저 급여 산출을 진행하십시오.");
             const r = currentCalcSnapshot.list.find(x => x.baseName === baseName);
